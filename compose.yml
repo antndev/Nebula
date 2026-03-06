@@ -1,0 +1,26 @@
+services:
+  node1:
+    build:
+      context: ./nebula-daemon
+      dockerfile: Dockerfile
+    image: nebula-daemon:local
+    container_name: nebula-node1
+    ports:
+      - "7001:7001"
+    volumes:
+      - nebula_node1:/var/lib/nebula
+    networks:
+      - nebula_net
+
+  node2:
+    image: nebula-daemon:local
+    container_name: nebula-node2
+    ports:
+      - "7002:7002"
+    volumes:
+      - nebula_node2:/var/lib/nebula
+    networks:
+      - nebula_net
+
+networks:
+  nebula_net:

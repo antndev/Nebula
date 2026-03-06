@@ -15,16 +15,19 @@ dependencies {
     // gRPC Kotlin
     implementation("io.grpc:grpc-kotlin-stub:1.5.0")
     implementation("io.grpc:grpc-protobuf:1.75.0")
+    implementation("io.grpc:grpc-stub:1.75.0")
     implementation("io.grpc:grpc-netty-shaded:1.75.0")
 
     // Protobuf
     implementation("com.google.protobuf:protobuf-kotlin:4.32.0")
+    implementation("javax.annotation:javax.annotation-api:1.3.2")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
     // Logging
-    implementation("org.slf4j:slf4j-simple:2.0.17")
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("ch.qos.logback:logback-classic:1.5.13")
 }
 
 protobuf {
