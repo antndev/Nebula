@@ -1,1 +1,0 @@
-# Nebula Daemon (NebulaD) — Core Planning (temporary, NOT FINAL)
