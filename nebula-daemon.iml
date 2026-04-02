@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module external.linked.project.id="nebula-daemon" external.linked.project.path="$MODULE_DIR$/nebula-daemon" external.root.project.path="$MODULE_DIR$/nebula-daemon" external.system.id="GRADLE" external.system.module.group="dev.antn" external.system.module.version="0.1.0-SNAPSHOT" type="JAVA_MODULE" version="4">
-  <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_21" inherit-compiler-output="true">
+<module external.linked.project.id="nebula-daemon" external.linked.project.path="$MODULE_DIR$/nebula-daemon" external.root.project.path="$MODULE_DIR$/nebula-daemon" external.system.id="GRADLE" external.system.module.group="dev.antn" external.system.module.version="2.0.0-SNAPSHOT" type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
     <exclude-output />
     <content url="file://$MODULE_DIR$/nebula-daemon">
       <excludeFolder url="file://$MODULE_DIR$/nebula-daemon/.gradle" />
       <excludeFolder url="file://$MODULE_DIR$/nebula-daemon/build" />
     </content>
-    <orderEntry type="jdk" jdkName="21" jdkType="JavaSDK" />
+    <orderEntry type="jdk" jdkName="openjdk-25" jdkType="JavaSDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
