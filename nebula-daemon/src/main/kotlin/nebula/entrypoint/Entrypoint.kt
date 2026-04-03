@@ -1,16 +1,20 @@
 package nebula.entrypoint
 
+import nebula.config.Config
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.network.packet.server.common.TransferPacket
 
-class Entrypoint {
+class Entrypoint(config: Config) {
+    private val contextEvaluator = ContextEvaluator(config.entrypointEvaluationBehavior)
+
     init {
         val server = MinecraftServer.init()
         val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
 
         MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             event.spawningInstance = instance
+            contextEvaluator.getTarget()
             event.player.sendPacket(TransferPacket("griefergames.net", 25565)) // test
         }
 

@@ -1,3 +1,5 @@
-.idea
-/nebula-daemon/build
-/nebula-daemon/.gradle
+.idea/
+*.iml
+.gradle/
+.kotlin/
+build/

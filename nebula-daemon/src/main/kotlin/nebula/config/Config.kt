@@ -1,16 +1,12 @@
 package nebula.config
 
-object ConfigHolder {
-    lateinit var config: AppConfig
-}
-
-data class AppConfig(
+data class Config(
     val entrypointEvaluationBehavior: EntrypointEvaluationBehavior,
-    val services: List<Service>
+    val services: List<Service>,
 )
 
 data class EntrypointEvaluationBehavior(
-    val default: String
+    val default: String,
 )
 
 data class Service(
@@ -18,4 +14,5 @@ data class Service(
     val image: String,
     val startPort: Int,
     val endPort: Int,
+
 )

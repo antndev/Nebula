@@ -1,8 +1,8 @@
 services:
   node1:
     build:
-      context: ./nebula-daemon
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: nebula-daemon/Dockerfile
     image: nebula-daemon:local
     container_name: nebula-node1
     ports:
