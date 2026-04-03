@@ -10,12 +10,12 @@ class Entrypoint(config: Config) {
 
     init {
         val server = MinecraftServer.init()
-        val instance = MinecraftServer.getInstanceManager().createInstanceContainer()
+        val instanceContainer = MinecraftServer.getInstanceManager().createInstanceContainer()
 
         MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
-            event.spawningInstance = instance
-            contextEvaluator.getTarget()
-            event.player.sendPacket(TransferPacket("griefergames.net", 25565)) // test
+            event.spawningInstance = instanceContainer
+            val target = contextEvaluator.getTarget()
+            event.player.sendPacket(TransferPacket(target.first, target.second)) // test
         }
 
         server.start("0.0.0.0", 25565)

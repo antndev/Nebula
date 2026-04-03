@@ -14,5 +14,4 @@ data class Service(
     val image: String,
     val startPort: Int,
     val endPort: Int,
-
 )
