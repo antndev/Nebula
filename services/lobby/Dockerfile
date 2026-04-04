@@ -24,12 +24,26 @@ COPY services/lobby/src services/lobby/src
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon :services:lobby:installDist
 
-RUN jdeps \
-    --ignore-missing-deps \
-    --print-module-deps \
-    --recursive \
-    --multi-release 25 \
-    services/lobby/build/install/lobby/lib/*.jar > /tmp/jre-modules.txt
+RUN set -eux; \
+    app_jar="$(find services/lobby/build/install/lobby/lib -maxdepth 1 -type f \( -name 'lobby.jar' -o -name 'lobby-*.jar' \) | sort | head -n 1)"; \
+    test -n "$app_jar"; \
+    classpath="$(find services/lobby/build/install/lobby/lib -maxdepth 1 -type f -name '*.jar' ! -samefile "$app_jar" -printf '%p:' | sed 's/:$//')"; \
+    if [ -n "$classpath" ]; then \
+        jdeps \
+            --ignore-missing-deps \
+            --print-module-deps \
+            --recursive \
+            --multi-release 25 \
+            --class-path "$classpath" \
+            "$app_jar" > /tmp/jre-modules.txt; \
+    else \
+        jdeps \
+            --ignore-missing-deps \
+            --print-module-deps \
+            --recursive \
+            --multi-release 25 \
+            "$app_jar" > /tmp/jre-modules.txt; \
+    fi
 
 RUN jlink \
     --add-modules "$(cat /tmp/jre-modules.txt)",jdk.unsupported \
