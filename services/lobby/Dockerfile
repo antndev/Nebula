@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM eclipse-temurin:25-jdk AS build
 
 WORKDIR /workspace
@@ -8,12 +10,19 @@ COPY gradlew.bat gradlew.bat
 COPY settings.gradle.kts build.gradle.kts ./
 COPY nebula-daemon/build.gradle.kts nebula-daemon/build.gradle.kts
 COPY nebula-sdk/minestom/build.gradle.kts nebula-sdk/minestom/build.gradle.kts
-COPY nebula-sdk/minestom/src nebula-sdk/minestom/src
 COPY services/lobby/build.gradle.kts services/lobby/build.gradle.kts
-COPY services/lobby/src services/lobby/src
 
 RUN chmod +x gradlew
-RUN ./gradlew --no-daemon :services:lobby:installDist
+
+# Warm Gradle's dependency cache before copying sources so rebuilds stay fast.
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew --no-daemon :services:lobby:dependencies
+
+COPY nebula-sdk/minestom/src nebula-sdk/minestom/src
+COPY services/lobby/src services/lobby/src
+
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew --no-daemon :services:lobby:installDist
 
 RUN jdeps \
     --ignore-missing-deps \
@@ -32,9 +41,9 @@ RUN jlink \
 
 FROM gcr.io/distroless/base-debian12:nonroot
 
-ENV JAVA_HOME=/opt/java
-ENV PATH="/opt/java/bin:${PATH}"
-ENV LOBBY_PORT=25566
+ENV JAVA_HOME=/opt/java \
+    PATH="/opt/java/bin:${PATH}" \
+    LOBBY_PORT=25566
 
 WORKDIR /app
 

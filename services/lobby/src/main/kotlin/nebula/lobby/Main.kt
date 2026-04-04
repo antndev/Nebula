@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("NebulaLobby")
 
 fun main() {
+    val port = System.getenv("LOBBY_PORT")?.toIntOrNull() ?: 25566
+
     NebulaSdk.init()
 
     val server = MinecraftServer.init()
@@ -24,6 +26,6 @@ fun main() {
         event.player.respawnPoint = Pos(0.0, 42.0, 0.0)
     }
 
-    server.start("0.0.0.0", 25565)
-    logger.info("Lobby service started.")
+    server.start("0.0.0.0", port)
+    logger.info("Lobby service started on port {}.", port)
 }
