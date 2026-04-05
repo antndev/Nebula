@@ -11,6 +11,7 @@ private val logger = LoggerFactory.getLogger("NebulaLobby")
 
 fun main() {
     val port = System.getenv("LOBBY_PORT")?.toIntOrNull() ?: 25566
+    System.setProperty("minestom.accept-transfers", "true")
 
     NebulaSdk.init()
 
@@ -27,5 +28,5 @@ fun main() {
     }
 
     server.start("0.0.0.0", port)
-    logger.info("Lobby service started on port {}.", port)
+    logger.info("Lobby service started on port {} and accepts transferred players.", port)
 }
