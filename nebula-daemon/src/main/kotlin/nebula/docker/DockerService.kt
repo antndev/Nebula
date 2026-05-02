@@ -18,6 +18,7 @@ data class CreateContainerRequest(
     val hostPort: UShort? = null,
     val bindIp: String = "0.0.0.0",
     val labels: Map<String, String> = emptyMap(),
+    val env: Map<String, String> = emptyMap(),
 )
 
 data class ManagedContainer(
@@ -43,6 +44,10 @@ class DockerService(
 
                 if (request.labels.isNotEmpty()) {
                     labels = request.labels
+                }
+
+                if (request.env.isNotEmpty()) {
+                    environment = request.env.map { (k, v) -> "$k=$v" }
                 }
 
                 if (request.command.isNotEmpty()) {

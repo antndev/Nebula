@@ -1,6 +1,5 @@
 package nebula.scaling
 
-import kotlinx.coroutines.flow.collect
 import nebula.config.Config
 import nebula.config.Service
 import nebula.docker.CreateContainerRequest
@@ -50,6 +49,7 @@ class Scaler(
     }
 
     suspend fun bootstrap() {
+        logger.info("Bootstrapping {} service(s)...", config.services.size)
         config.services.forEach { service ->
             ensureMinimumInstances(service)
         }
@@ -74,6 +74,12 @@ class Scaler(
         val missingInstances = targetInstances - currentInstances
 
         if (missingInstances <= 0) {
+            logger.info(
+                "Service '{}' has {} instance(s) running, minimum is {}. Nothing to do.",
+                service.name,
+                currentInstances,
+                targetInstances,
+            )
             return
         }
 
@@ -85,11 +91,51 @@ class Scaler(
             missingInstances,
         )
 
-        logger.info("Ensuring image '{}' is available for service '{}'.", service.image, service.name)
-        dockerService.pullImage(service.image).collect()
+        pullImage(service.image)
 
         repeat(missingInstances) {
             createInstance(service)
+        }
+    }
+
+    private suspend fun pullImage(image: String) {
+        logger.info("Pulling image '{}'...", image)
+
+        val layerStatus = mutableMapOf<String, String>()
+        var upToDate = false
+
+        dockerService.pullImage(image).collect { pull ->
+            val status = pull.statusText
+
+            // Top-level status messages (no layer id)
+            if (pull.id == null) {
+                if (status.contains("up to date", ignoreCase = true) ||
+                    status.contains("Status:", ignoreCase = true)
+                ) {
+                    upToDate = status.contains("up to date", ignoreCase = true)
+                    logger.info("  {}", status)
+                }
+                return@collect
+            }
+
+            val id = pull.id ?: return@collect
+            val layerId = id.take(12)
+
+            // Only log on status transitions to avoid spam
+            if (layerStatus[id] == status) return@collect
+            layerStatus[id] = status
+
+            when {
+                status == "Pull complete" || status == "Already exists" || status == "Download complete" ->
+                    logger.info("  [{}] {}", layerId, status)
+                status == "Pulling fs layer" || status == "Waiting" ->
+                    logger.debug("  [{}] {}", layerId, status)
+                // Skip "Downloading" / "Extracting" intermediate updates
+            }
+        }
+
+        if (!upToDate) {
+            logger.info("Image '{}' ready.", image)
         }
     }
 
@@ -111,6 +157,11 @@ class Scaler(
                     LABEL_MANAGED to "true",
                     LABEL_SERVICE to service.name,
                     LABEL_PORT to hostPort.toString(),
+                ),
+                env = mapOf(
+                    "NEBULA_HOST" to config.managementHost,
+                    "NEBULA_PORT" to config.managementPort.toString(),
+                    "NEBULA_SERVICE_PORT" to hostPort.toString(),
                 ),
             )
         )

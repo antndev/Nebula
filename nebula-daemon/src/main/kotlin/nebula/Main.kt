@@ -8,6 +8,7 @@ import nebula.config.EntrypointEvaluationBehavior
 import nebula.config.JoiningBehavior
 import nebula.config.ScalingBehavior
 import nebula.config.Service
+import nebula.api.TelemetryServer
 import nebula.docker.DockerService
 import nebula.entrypoint.Entrypoint
 import nebula.scaling.Scaler
@@ -45,9 +46,9 @@ fun main() = runBlocking {
     val dockerService = DockerService.connectForCurrentPlatform()
     val scaler = Scaler(config, dockerService, registry)
 
-    logger.info("Reattaching existing service instances...")
+    TelemetryServer(registry).start()
+
     scaler.reattach()
-    logger.info("Bootstrapping minimum service instances...")
     scaler.bootstrap()
 
     launch {

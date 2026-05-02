@@ -28,6 +28,19 @@ class ServiceRegistry {
         instances[index] = instances[index].copy(status = status, connectedPlayers = connectedPlayers)
     }
 
+    fun getInstanceByPort(hostPort: Int): ServiceInstance? =
+        instancesByService.values.flatten().find { it.hostPort == hostPort }
+
+    fun updateTelemetry(hostPort: Int, playerCount: Int, status: ServiceInstanceStatus) {
+        for ((_, instances) in instancesByService) {
+            val index = instances.indexOfFirst { it.hostPort == hostPort }
+            if (index != -1) {
+                instances[index] = instances[index].copy(status = status, connectedPlayers = playerCount)
+                return
+            }
+        }
+    }
+
     fun getInstances(serviceName: String): List<ServiceInstance> =
         instancesByService[serviceName].orEmpty().toList()
 
@@ -53,7 +66,7 @@ class ServiceRegistry {
 
         if (ready.isNotEmpty()) return ready
 
-        // TODO: remove this fallback once service instances report readiness to the daemon.
+        // Fall back to STARTING instances while they are warming up (before first telemetry arrives).
         return getInstances(service.name)
             .filter { it.status == ServiceInstanceStatus.STARTING && it.connectedPlayers < service.scaling.maxPlayersPerInstance }
     }
