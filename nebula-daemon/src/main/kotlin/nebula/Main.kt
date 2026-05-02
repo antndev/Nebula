@@ -1,5 +1,7 @@
 package nebula
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import nebula.config.Config
 import nebula.config.EntrypointEvaluationBehavior
@@ -9,6 +11,7 @@ import nebula.config.Service
 import nebula.docker.DockerService
 import nebula.entrypoint.Entrypoint
 import nebula.scaling.Scaler
+import nebula.service.ServiceRegistry
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("NebulaD")
@@ -38,12 +41,23 @@ fun main() = runBlocking {
             )
         ),
     )
+    val registry = ServiceRegistry()
     val dockerService = DockerService.connectForCurrentPlatform()
-    val scaler = Scaler(config, dockerService)
+    val scaler = Scaler(config, dockerService, registry)
 
+    logger.info("Reattaching existing service instances...")
+    scaler.reattach()
     logger.info("Bootstrapping minimum service instances...")
     scaler.bootstrap()
+
+    launch {
+        while (true) {
+            delay(30_000)
+            scaler.reconcileAllServices()
+        }
+    }
+
     logger.info("Starting the entrypoint...")
-    Entrypoint(config, scaler)
+    Entrypoint(config, registry)
     logger.info("Entrypoint started.")
 }

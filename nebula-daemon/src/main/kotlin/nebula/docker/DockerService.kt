@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.devnatan.dockerkt.DockerClient
 import me.devnatan.dockerkt.models.PortBinding
+import me.devnatan.dockerkt.models.container.ContainerListOptions
 import me.devnatan.dockerkt.models.container.exposedPort
 import me.devnatan.dockerkt.models.container.hostConfig
 import me.devnatan.dockerkt.models.portBindings
@@ -16,6 +17,13 @@ data class CreateContainerRequest(
     val containerPort: UShort? = null,
     val hostPort: UShort? = null,
     val bindIp: String = "0.0.0.0",
+    val labels: Map<String, String> = emptyMap(),
+)
+
+data class ManagedContainer(
+    val containerId: String,
+    val serviceName: String,
+    val hostPort: Int,
 )
 
 class DockerService(
@@ -32,6 +40,10 @@ class DockerService(
         withContext(Dispatchers.IO) {
             client.containers.create {
                 image = request.image
+
+                if (request.labels.isNotEmpty()) {
+                    labels = request.labels
+                }
 
                 if (request.command.isNotEmpty()) {
                     command = request.command
@@ -77,7 +89,28 @@ class DockerService(
 
     suspend fun createAndStartContainer(request: CreateContainerRequest): String {
         val containerId = createContainer(request)
-        startContainer(containerId)
+        try {
+            startContainer(containerId)
+        } catch (e: Exception) {
+            runCatching { removeContainer(containerId) }
+            throw e
+        }
         return containerId
     }
+
+    suspend fun listManagedContainers(): List<ManagedContainer> =
+        withContext(Dispatchers.IO) {
+            client.containers.list(
+                ContainerListOptions(
+                    all = true,
+                    filters = ContainerListOptions.Filters(label = listOf("nebula.managed=true")),
+                )
+            )
+                .filter { it.state == "running" }
+                .mapNotNull { container ->
+                    val serviceName = container.labels["nebula.service"] ?: return@mapNotNull null
+                    val hostPort = container.labels["nebula.port"]?.toIntOrNull() ?: return@mapNotNull null
+                    ManagedContainer(container.id, serviceName, hostPort)
+                }
+        }
 }

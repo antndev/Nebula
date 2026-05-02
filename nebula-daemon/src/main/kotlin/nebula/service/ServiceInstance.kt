@@ -1,4 +1,4 @@
-package nebula.scaling.model
+package nebula.service
 
 data class ServiceInstance(
     val serviceName: String,

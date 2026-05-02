@@ -1,4 +1,4 @@
-package nebula.scaling.model
+package nebula.service
 
 enum class ServiceInstanceStatus {
     STARTING,

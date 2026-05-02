@@ -1,16 +1,17 @@
 package nebula.entrypoint
 
 import nebula.config.Config
-import nebula.scaling.Scaler
+import nebula.service.ServiceRegistry
+import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.network.packet.server.common.TransferPacket
 import org.slf4j.LoggerFactory
 
-class Entrypoint(config: Config, scaler: Scaler) {
+class Entrypoint(config: Config, registry: ServiceRegistry) {
     private val logger = LoggerFactory.getLogger(Entrypoint::class.java)
-    private val contextEvaluator = ContextEvaluator(config.entrypointEvaluationBehavior, scaler)
+    private val contextEvaluator = ContextEvaluator(config.entrypointEvaluationBehavior, config.services, registry)
 
     init {
         val server = MinecraftServer.init()
@@ -25,7 +26,16 @@ class Entrypoint(config: Config, scaler: Scaler) {
                 return@addListener
             }
 
-            val target = contextEvaluator.getTarget()
+            val target = runCatching { contextEvaluator.getTarget() }.getOrElse { e ->
+                logger.error(
+                    "Failed to route player '{}' ({}): {}",
+                    event.player.username,
+                    event.player.uuid,
+                    e.message,
+                )
+                event.player.kick(Component.text("No servers are available right now. Please try again later."))
+                return@addListener
+            }
             logger.info(
                 "Player '{}' ({}) joined the entrypoint and was routed to service '{}' at {}:{} [container={}].",
                 event.player.username,

@@ -4,6 +4,7 @@ import nebula.sdk.minestom.NebulaSdk
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
+import net.minestom.server.event.player.PlayerBlockBreakEvent
 import net.minestom.server.instance.block.Block
 import org.slf4j.LoggerFactory
 
@@ -19,12 +20,16 @@ fun main() {
     val instanceContainer = MinecraftServer.getInstanceManager().createInstanceContainer()
 
     instanceContainer.setGenerator { unit ->
-        unit.modifier().fillHeight(0, 40, Block.GRASS_BLOCK)
+        unit.modifier().fillHeight(0, 1, Block.GRASS_BLOCK)
     }
 
     MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
         event.spawningInstance = instanceContainer
-        event.player.respawnPoint = Pos(0.0, 42.0, 0.0)
+        event.player.respawnPoint = Pos(0.0, 1.0, 0.0)
+    }
+
+    MinecraftServer.getGlobalEventHandler().addListener(PlayerBlockBreakEvent::class.java) { event ->
+        event.isCancelled = true
     }
 
     server.start("0.0.0.0", port)
