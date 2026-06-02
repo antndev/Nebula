@@ -7,7 +7,11 @@ data class ScalingBehavior(
     val maxPlayersPerInstance: Int = 100,
     val warmReadyInstances: Int = 0,
     val scalingCooldownSeconds: Int = 30,
-    val scaleDownEmptyAfterSeconds: Int = 180,
+    /**
+     * How long an empty instance is kept before it is scaled down, in seconds.
+     * `null` disables scale-down entirely — instances are never removed automatically.
+     */
+    val scaleDownEmptyAfterSeconds: Int? = null,
 ) {
     init {
         require(minInstances >= 0) { "minInstances must be at least 0." }
@@ -22,8 +26,8 @@ data class ScalingBehavior(
         }
         require(warmReadyInstances >= 0) { "warmReadyInstances must be at least 0." }
         require(scalingCooldownSeconds >= 0) { "scalingCooldownSeconds must be at least 0." }
-        require(scaleDownEmptyAfterSeconds >= 0) {
-            "scaleDownEmptyAfterSeconds must be at least 0."
+        require(scaleDownEmptyAfterSeconds == null || scaleDownEmptyAfterSeconds >= 0) {
+            "scaleDownEmptyAfterSeconds must be at least 0 when set."
         }
     }
 }

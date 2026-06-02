@@ -5,6 +5,16 @@ data class Service(
     val image: String,
     val startPort: Int,
     val endPort: Int,
+    /**
+     * Whether each instance is tied to a stable identity (a "key") whose world must survive restarts.
+     *
+     * `false` (default) — pooled: instances are interchangeable, players are load-balanced across them,
+     * and the pool scales with player count (lobbies, gamemodes).
+     *
+     * `true` — keyed: exactly one instance per key (e.g. a player's SMP), started on demand, its world
+     * persisted across restarts, and never auto-deleted.
+     */
+    val persistent: Boolean = false,
     val joiningBehavior: JoiningBehavior = JoiningBehavior.FILL_EXISTING,
     val environment: Map<String, String> = emptyMap(),
     val scaling: ScalingBehavior = ScalingBehavior(),
@@ -25,6 +35,9 @@ data class Service(
         }
         require(scaling.maxInstances == null || scaling.maxInstances <= portCapacity) {
             "maxInstances (${scaling.maxInstances}) cannot exceed port capacity ($portCapacity)."
+        }
+        require(!persistent || scaling.minInstances == 0) {
+            "persistent services are started on demand per key; minInstances must be 0."
         }
     }
 
