@@ -4,5 +4,6 @@
 .kotlin/
 build/
 
-# Local Claude Code notes (not part of the repo)
+# Claude Code — local notes + agent worktrees (not part of the repo)
 CLAUDE.md
+.claude/
