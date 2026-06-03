@@ -1,7 +1,6 @@
 package nebula.api
 
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.call
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.receiveText
@@ -23,7 +22,7 @@ class TelemetryServer(private val registry: ServiceRegistry) {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun start() {
-        embeddedServer(CIO, port = MANAGEMENT_PORT, configure = {}) {
+        val server = embeddedServer(CIO, port = MANAGEMENT_PORT) {
             routing {
                 post("/telemetry") {
                     val body = call.receiveText()
@@ -49,8 +48,9 @@ class TelemetryServer(private val registry: ServiceRegistry) {
                     call.respond(HttpStatusCode.OK)
                 }
             }
-        }.start(wait = false)
+        }
 
+        server.start(wait = false)
         logger.info("Management API listening on port {}.", MANAGEMENT_PORT)
     }
 }

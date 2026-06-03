@@ -47,7 +47,7 @@ class DockerService(
                 }
 
                 if (request.env.isNotEmpty()) {
-                    environment = request.env.map { (k, v) -> "$k=$v" }
+                    env = request.env.map { (k, v) -> "$k=$v" }
                 }
 
                 if (request.command.isNotEmpty()) {
