@@ -3,3 +3,6 @@
 .gradle/
 .kotlin/
 build/
+
+# Local Claude Code notes (not part of the repo)
+CLAUDE.md
