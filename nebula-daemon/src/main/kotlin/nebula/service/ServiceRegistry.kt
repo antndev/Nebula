@@ -16,31 +16,6 @@ class ServiceRegistry {
         instancesByService[serviceName]?.removeIf { it.containerId == containerId }
     }
 
-    fun updateStatus(
-        serviceName: String,
-        containerId: String,
-        status: ServiceInstanceStatus,
-        connectedPlayers: Int,
-    ) {
-        val instances = instancesByService[serviceName] ?: return
-        val index = instances.indexOfFirst { it.containerId == containerId }
-        if (index == -1) return
-        instances[index] = instances[index].copy(status = status, connectedPlayers = connectedPlayers)
-    }
-
-    fun getInstanceByPort(hostPort: Int): ServiceInstance? =
-        instancesByService.values.flatten().find { it.hostPort == hostPort }
-
-    fun updateTelemetry(hostPort: Int, playerCount: Int, status: ServiceInstanceStatus) {
-        for ((_, instances) in instancesByService) {
-            val index = instances.indexOfFirst { it.hostPort == hostPort }
-            if (index != -1) {
-                instances[index] = instances[index].copy(status = status, connectedPlayers = playerCount)
-                return
-            }
-        }
-    }
-
     fun getInstances(serviceName: String): List<ServiceInstance> =
         instancesByService[serviceName].orEmpty().toList()
 
