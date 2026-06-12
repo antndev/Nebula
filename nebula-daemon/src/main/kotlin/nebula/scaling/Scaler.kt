@@ -4,6 +4,7 @@ import nebula.config.Config
 import nebula.config.Service
 import nebula.docker.CreateContainerRequest
 import nebula.docker.DockerService
+import me.devnatan.dockerkt.resource.image.ImageNotFoundException
 import nebula.service.ServiceInstance
 import nebula.service.ServiceInstanceStatus
 import nebula.service.ServiceRegistry
@@ -88,12 +89,13 @@ class Scaler(
             missingInstances,
         )
 
-        pullImage(service.image)
-
         repeat(missingInstances) {
             createInstance(service)
         }
     }
+
+    private fun isImageMissing(e: Exception): Boolean =
+        e is ImageNotFoundException || e.message?.contains("No such image", ignoreCase = true) == true
 
     private suspend fun pullImage(image: String) {
         logger.info("Pulling image '{}'...", image)
@@ -134,31 +136,42 @@ class Scaler(
     }
 
     private suspend fun createInstance(service: Service): ServiceInstance {
-        check(registry.getActiveInstances(service.name).size < service.effectiveMaxInstances) {
-            "Service '${service.name}' is already at its maximum tracked instance count."
+        val serviceMax = service.scaling.maxInstances
+        check(serviceMax == null || registry.getActiveInstances(service.name).size < serviceMax) {
+            "Service '${service.name}' is already at its maximum instance count."
+        }
+        check(registry.totalActiveInstances() < config.maxInstancesPerNode) {
+            "This node is already at its maximum of ${config.maxInstancesPerNode} instances."
         }
 
-        val hostPort = registry.nextAvailablePort(service)
-            ?: error("No free host ports remain for service '${service.name}'.")
+        val hostPort = registry.nextAvailablePort()
+            ?: error("No free host ports remain in the node port range.")
 
         logger.info("Creating service instance '{}' on host port {}.", service.name, hostPort)
-        val containerId = dockerService.createAndStartContainer(
-            CreateContainerRequest(
-                image = service.image,
-                containerPort = SERVICE_CONTAINER_PORT,
-                hostPort = hostPort.toUShort(),
-                labels = mapOf(
-                    LABEL_MANAGED to "true",
-                    LABEL_SERVICE to service.name,
-                    LABEL_PORT to hostPort.toString(),
-                ),
-                env = mapOf(
-                    "NEBULA_HOST" to config.managementHost,
-                    "NEBULA_PORT" to config.managementPort.toString(),
-                    "NEBULA_SERVICE_PORT" to hostPort.toString(),
-                ),
-            )
+        val request = CreateContainerRequest(
+            image = service.image,
+            containerPort = SERVICE_CONTAINER_PORT,
+            hostPort = hostPort.toUShort(),
+            labels = mapOf(
+                LABEL_MANAGED to "true",
+                LABEL_SERVICE to service.name,
+                LABEL_PORT to hostPort.toString(),
+            ),
+            env = mapOf(
+                "NEBULA_HOST" to config.managementHost,
+                "NEBULA_PORT" to config.managementPort.toString(),
+                "NEBULA_SERVICE_PORT" to hostPort.toString(),
+            ),
         )
+
+        val containerId = try {
+            dockerService.createAndStartContainer(request)
+        } catch (e: Exception) {
+            if (!isImageMissing(e)) throw e
+            logger.info("Image '{}' is not present locally.", service.image)
+            pullImage(service.image)
+            dockerService.createAndStartContainer(request)
+        }
 
         val instance = ServiceInstance(
             serviceName = service.name,

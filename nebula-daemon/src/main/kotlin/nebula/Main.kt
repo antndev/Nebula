@@ -27,8 +27,6 @@ fun main() = runBlocking {
             Service(
                 name = "lobby",
                 image = "ghcr.io/antndev/nebula-lobby:latest",
-                startPort = 25566,
-                endPort = 25576,
                 joiningBehavior = JoiningBehavior.FILL_EXISTING,
                 scaling = ScalingBehavior(
                     minInstances = 1,

@@ -7,9 +7,12 @@ server, only as an entrypoint.
 
 Let's say, for example, you want a main lobby service. You would define it as
 `lobby`, define a Docker image, secrets, scaling behavior, when instances
-should be created, max players, etc., and the ports. This also defines the
-max number of instances you can have of that service, for example
-`25566-25576` (`25565` is used by the entrypoint).
+should be created, max players, etc.
+
+Ports: `25565` is always reserved for the entrypoint itself. All service
+instances get their host ports from ONE fixed node range `32800-32899` —
+that's the fundamental hardcoded limit (100 servers per node). On top of that
+there's a lower configurable limit per node (3..100, default 50).
 
 For the entrypoint to know where players should land, you define its behavior
 like the following. The format, etc. may change; this only acts as a rough

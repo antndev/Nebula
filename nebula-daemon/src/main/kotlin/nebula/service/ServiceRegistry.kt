@@ -1,5 +1,6 @@
 package nebula.service
 
+import nebula.config.Config
 import nebula.config.JoiningBehavior
 import nebula.config.Service
 import nebula.protocol.NebulaPlayer
@@ -53,9 +54,17 @@ class ServiceRegistry {
     fun getActiveInstances(serviceName: String): List<ServiceInstance> =
         getInstances(serviceName).filter { it.status != ServiceInstanceStatus.STOPPED }
 
-    fun nextAvailablePort(service: Service): Int? {
-        val usedPorts = getActiveInstances(service.name).map { it.hostPort }.toSet()
-        return (service.startPort..service.endPort).firstOrNull { it !in usedPorts }
+    fun totalActiveInstances(): Int =
+        instancesByService.values.sumOf { instances ->
+            instances.count { it.status != ServiceInstanceStatus.STOPPED }
+        }
+
+    fun nextAvailablePort(): Int? {
+        val usedPorts = instancesByService.values.flatten()
+            .filter { it.status != ServiceInstanceStatus.STOPPED }
+            .map { it.hostPort }
+            .toSet()
+        return Config.NODE_PORT_RANGE.firstOrNull { it !in usedPorts }
     }
 
     fun selectJoinTarget(service: Service): ServiceInstance {

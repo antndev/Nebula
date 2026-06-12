@@ -50,6 +50,6 @@ class Entrypoint(config: Config, registry: ServiceRegistry) {
             event.player.sendPacket(TransferPacket(transferHost, target.hostPort))
         }
 
-        server.start("0.0.0.0", 25565)
+        server.start("0.0.0.0", Config.ENTRYPOINT_PORT)
     }
 }
