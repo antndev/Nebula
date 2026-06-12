@@ -9,7 +9,7 @@ data class Config(
 ) {
     companion object {
         const val ENTRYPOINT_PORT = 25565
-        val NODE_PORT_RANGE = 32800..32899
+        val NODE_PORT_RANGE = 32800..33799
     }
 
     init {

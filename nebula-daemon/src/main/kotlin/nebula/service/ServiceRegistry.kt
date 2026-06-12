@@ -54,6 +54,11 @@ class ServiceRegistry {
     fun getActiveInstances(serviceName: String): List<ServiceInstance> =
         getInstances(serviceName).filter { it.status != ServiceInstanceStatus.STOPPED }
 
+    fun findPlayerInstance(uuid: String): ServiceInstance? =
+        instancesByService.values.flatten().find { instance ->
+            instance.players.any { it.uuid == uuid }
+        }
+
     fun totalActiveInstances(): Int =
         instancesByService.values.sumOf { instances ->
             instances.count { it.status != ServiceInstanceStatus.STOPPED }

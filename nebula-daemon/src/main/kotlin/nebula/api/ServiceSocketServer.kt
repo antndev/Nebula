@@ -49,17 +49,38 @@ class ServiceSocketServer(
                                     }
                                 }
                                 is ServiceMessage.PlayerJoined -> servicePort?.let { port ->
+                                    val previous = registry.findPlayerInstance(message.player.uuid)
                                     registry.playerJoined(port, message.player)
-                                    logger.info(
-                                        "Player '{}' ({}) joined instance on port {}.",
-                                        message.player.username,
-                                        message.player.uuid,
-                                        port,
-                                    )
+                                    if (previous != null && previous.hostPort != port) {
+                                        logger.debug(
+                                            "Player '{}' ({}) moved from port {} to port {}.",
+                                            message.player.username,
+                                            message.player.uuid,
+                                            previous.hostPort,
+                                            port,
+                                        )
+                                    } else {
+                                        logger.info(
+                                            "Player '{}' ({}) joined the network on port {}.",
+                                            message.player.username,
+                                            message.player.uuid,
+                                            port,
+                                        )
+                                    }
                                 }
                                 is ServiceMessage.PlayerLeft -> servicePort?.let { port ->
                                     registry.playerLeft(port, message.uuid)
-                                    logger.info("Player {} left instance on port {}.", message.uuid, port)
+                                    val still = registry.findPlayerInstance(message.uuid)
+                                    if (still != null) {
+                                        logger.debug(
+                                            "Player {} left instance on port {} (still on port {}).",
+                                            message.uuid,
+                                            port,
+                                            still.hostPort,
+                                        )
+                                    } else {
+                                        logger.info("Player {} left the network (was on port {}).", message.uuid, port)
+                                    }
                                 }
                             }
                         }
