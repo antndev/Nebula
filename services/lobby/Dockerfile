@@ -9,6 +9,8 @@ COPY gradlew gradlew
 COPY gradlew.bat gradlew.bat
 COPY settings.gradle.kts build.gradle.kts ./
 COPY nebula-daemon/build.gradle.kts nebula-daemon/build.gradle.kts
+COPY nebula-protocol/build.gradle.kts nebula-protocol/build.gradle.kts
+COPY nebula-sdk/core/build.gradle.kts nebula-sdk/core/build.gradle.kts
 COPY nebula-sdk/minestom/build.gradle.kts nebula-sdk/minestom/build.gradle.kts
 COPY services/lobby/build.gradle.kts services/lobby/build.gradle.kts
 
@@ -18,6 +20,8 @@ RUN chmod +x gradlew
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon :services:lobby:dependencies
 
+COPY nebula-protocol/src nebula-protocol/src
+COPY nebula-sdk/core/src nebula-sdk/core/src
 COPY nebula-sdk/minestom/src nebula-sdk/minestom/src
 COPY services/lobby/src services/lobby/src
 

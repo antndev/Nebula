@@ -2,6 +2,7 @@ package nebula.service
 
 import nebula.config.JoiningBehavior
 import nebula.config.Service
+import nebula.protocol.NebulaPlayer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -14,6 +15,36 @@ class ServiceRegistry {
 
     fun deregister(serviceName: String, containerId: String) {
         instancesByService[serviceName]?.removeIf { it.containerId == containerId }
+    }
+
+    fun serviceConnected(hostPort: Int, players: List<NebulaPlayer>): Boolean =
+        update(hostPort) { it.copy(status = ServiceInstanceStatus.READY, players = players) }
+
+    fun serviceDisconnected(hostPort: Int) {
+        update(hostPort) { it.copy(status = ServiceInstanceStatus.STARTING, players = emptyList()) }
+    }
+
+    fun playerJoined(hostPort: Int, player: NebulaPlayer) {
+        update(hostPort) { instance ->
+            instance.copy(players = instance.players.filterNot { it.uuid == player.uuid } + player)
+        }
+    }
+
+    fun playerLeft(hostPort: Int, uuid: String) {
+        update(hostPort) { instance ->
+            instance.copy(players = instance.players.filterNot { it.uuid == uuid })
+        }
+    }
+
+    private fun update(hostPort: Int, transform: (ServiceInstance) -> ServiceInstance): Boolean {
+        for (instances in instancesByService.values) {
+            val index = instances.indexOfFirst { it.hostPort == hostPort }
+            if (index != -1) {
+                instances[index] = transform(instances[index])
+                return true
+            }
+        }
+        return false
     }
 
     fun getInstances(serviceName: String): List<ServiceInstance> =
@@ -41,7 +72,6 @@ class ServiceRegistry {
 
         if (ready.isNotEmpty()) return ready
 
-        // Fall back to STARTING instances while they are warming up (before first telemetry arrives).
         return getInstances(service.name)
             .filter { it.status == ServiceInstanceStatus.STARTING && it.connectedPlayers < service.scaling.maxPlayersPerInstance }
     }

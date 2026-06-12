@@ -1,5 +1,12 @@
 package nebula.sdk.minestom
 
+import nebula.protocol.NebulaPlayer
+import nebula.sdk.core.NebulaEnvironment
+import nebula.sdk.core.NodeConnection
+import net.minestom.server.MinecraftServer
+import net.minestom.server.entity.Player
+import net.minestom.server.event.player.PlayerDisconnectEvent
+import net.minestom.server.event.player.PlayerSpawnEvent
 import org.slf4j.LoggerFactory
 
 object NebulaSdk {
@@ -10,8 +17,29 @@ object NebulaSdk {
         if (initialized) return
         initialized = true
 
-        // Telemetry/communication transport was removed — to be replaced with a live,
-        // push-based channel (events on change, not a 10s poll).
+        val connection = NodeConnection(
+            daemonHost = NebulaEnvironment.daemonHost,
+            daemonPort = NebulaEnvironment.daemonPort,
+            servicePort = NebulaEnvironment.servicePort,
+            playersProvider = {
+                MinecraftServer.getConnectionManager().onlinePlayers.map { it.toNebulaPlayer() }
+            },
+        )
+
+        val events = MinecraftServer.getGlobalEventHandler()
+        events.addListener(PlayerSpawnEvent::class.java) { event ->
+            if (event.isFirstSpawn) {
+                connection.playerJoined(event.player.toNebulaPlayer())
+            }
+        }
+        events.addListener(PlayerDisconnectEvent::class.java) { event ->
+            connection.playerLeft(event.player.uuid.toString())
+        }
+
+        connection.start()
         logger.info("Nebula SDK initialized.")
     }
+
+    private fun Player.toNebulaPlayer(): NebulaPlayer =
+        NebulaPlayer(uuid.toString(), username)
 }

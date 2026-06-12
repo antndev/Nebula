@@ -7,7 +7,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 val targetJava = 25
 
 plugins {
-    kotlin("jvm") version "2.3.0"
+    kotlin("jvm")
     application
 }
 
@@ -25,6 +25,7 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":nebula-protocol"))
     implementation("me.devnatan:docker-kotlin:0.14.4")
     implementation("org.slf4j:slf4j-api:2.0.13")
     implementation("ch.qos.logback:logback-classic:1.5.32")
@@ -33,6 +34,7 @@ dependencies {
     implementation("net.minestom:minestom:26_1-SNAPSHOT")
     implementation("io.ktor:ktor-server-cio:3.3.3")
     implementation("io.ktor:ktor-server-core:3.3.3")
+    implementation("io.ktor:ktor-server-websockets:3.3.3")
 }
 
 application {

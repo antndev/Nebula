@@ -1,6 +1,7 @@
 package nebula.lobby
 
 import nebula.sdk.minestom.NebulaSdk
+import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
@@ -14,9 +15,8 @@ fun main() {
     val port = System.getenv("LOBBY_PORT")?.toIntOrNull() ?: 25566
     System.setProperty("minestom.accept-transfers", "true")
 
+    val server = MinecraftServer.init(Auth.Online())
     NebulaSdk.init()
-
-    val server = MinecraftServer.init()
     val instanceContainer = MinecraftServer.getInstanceManager().createInstanceContainer()
 
     instanceContainer.setGenerator { unit ->

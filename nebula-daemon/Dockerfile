@@ -7,7 +7,9 @@ COPY gradlew gradlew
 COPY gradlew.bat gradlew.bat
 COPY settings.gradle.kts build.gradle.kts ./
 COPY nebula-daemon/build.gradle.kts nebula-daemon/build.gradle.kts
+COPY nebula-protocol/build.gradle.kts nebula-protocol/build.gradle.kts
 COPY nebula-daemon/src nebula-daemon/src
+COPY nebula-protocol/src nebula-protocol/src
 
 RUN chmod +x gradlew
 RUN ./gradlew --no-daemon :nebula-daemon:installDist

@@ -19,6 +19,8 @@ on:
       - "gradlew"
       - "gradlew.bat"
       - "nebula-daemon/build.gradle.kts"
+      - "nebula-protocol/**"
+      - "nebula-sdk/core/**"
       - "nebula-sdk/minestom/**"
       - "services/lobby/**"
   workflow_dispatch:
