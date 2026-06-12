@@ -2,7 +2,7 @@ package nebula.entrypoint
 
 import nebula.config.EntrypointEvaluationBehavior
 import nebula.config.Service
-import nebula.entrypoint.model.ResolvedTransferTarget
+import nebula.service.ServiceInstance
 import nebula.service.ServiceRegistry
 
 class ContextEvaluator(
@@ -10,18 +10,11 @@ class ContextEvaluator(
     private val services: List<Service>,
     private val registry: ServiceRegistry,
 ) {
-    fun getTarget(): ResolvedTransferTarget {
+    fun getTarget(): ServiceInstance {
         val serviceName = resolveTargetService()
         val service = services.firstOrNull { it.name == serviceName }
             ?: error("Unknown service '$serviceName'.")
-        val instance = registry.selectJoinTarget(service)
-
-        return ResolvedTransferTarget(
-            host = config.transferHost,
-            port = instance.hostPort,
-            serviceName = serviceName,
-            containerId = instance.containerId,
-        )
+        return registry.selectJoinTarget(service)
     }
 
     private fun resolveTargetService(): String = config.default

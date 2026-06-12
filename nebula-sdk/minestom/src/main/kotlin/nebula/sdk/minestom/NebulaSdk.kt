@@ -1,7 +1,6 @@
 package nebula.sdk.minestom
 
 import nebula.protocol.NebulaPlayer
-import nebula.sdk.core.NebulaEnvironment
 import nebula.sdk.core.NodeConnection
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
@@ -18,9 +17,10 @@ object NebulaSdk {
         initialized = true
 
         val connection = NodeConnection(
-            daemonHost = NebulaEnvironment.daemonHost,
-            daemonPort = NebulaEnvironment.daemonPort,
-            servicePort = NebulaEnvironment.servicePort,
+            daemonHost = System.getenv("NEBULA_HOST") ?: "host.docker.internal",
+            daemonPort = System.getenv("NEBULA_PORT")?.toIntOrNull() ?: 7654,
+            servicePort = System.getenv("NEBULA_SERVICE_PORT")?.toIntOrNull()
+                ?: error("NEBULA_SERVICE_PORT is not set — is this service running outside of Nebula?"),
             playersProvider = {
                 MinecraftServer.getConnectionManager().onlinePlayers.map { it.toNebulaPlayer() }
             },

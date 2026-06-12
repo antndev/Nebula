@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 class Entrypoint(config: Config, registry: ServiceRegistry) {
     private val logger = LoggerFactory.getLogger(Entrypoint::class.java)
     private val contextEvaluator = ContextEvaluator(config.entrypointEvaluationBehavior, config.services, registry)
+    private val transferHost = config.entrypointEvaluationBehavior.transferHost
 
     init {
         val server = MinecraftServer.init(Auth.Online())
@@ -42,11 +43,11 @@ class Entrypoint(config: Config, registry: ServiceRegistry) {
                 event.player.username,
                 event.player.uuid,
                 target.serviceName,
-                target.host,
-                target.port,
+                transferHost,
+                target.hostPort,
                 target.containerId.take(12),
             )
-            event.player.sendPacket(TransferPacket(target.host, target.port))
+            event.player.sendPacket(TransferPacket(transferHost, target.hostPort))
         }
 
         server.start("0.0.0.0", 25565)
