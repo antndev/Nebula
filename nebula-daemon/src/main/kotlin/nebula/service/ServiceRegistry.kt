@@ -4,6 +4,8 @@ import nebula.config.Config
 import nebula.config.JoiningBehavior
 import nebula.config.Service
 import nebula.protocol.NebulaPlayer
+import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -69,8 +71,11 @@ class ServiceRegistry {
             .filter { it.status != ServiceInstanceStatus.STOPPED }
             .map { it.hostPort }
             .toSet()
-        return Config.NODE_PORT_RANGE.firstOrNull { it !in usedPorts }
+        return Config.NODE_PORT_RANGE.firstOrNull { it !in usedPorts && isPortFree(it) }
     }
+
+    private fun isPortFree(port: Int): Boolean =
+        runCatching { ServerSocket().use { it.bind(InetSocketAddress(port)) } }.isSuccess
 
     fun selectJoinTarget(service: Service): ServiceInstance {
         val candidates = getJoinableInstances(service)
