@@ -63,9 +63,6 @@ class Scaler(
 
     suspend fun reconcileService(service: Service) {
         ensureMinimumInstances(service)
-
-        // TODO: use reported instance state and player counts to decide scale up/down.
-        // For now we only guarantee the configured baseline instance count exists.
     }
 
     private suspend fun ensureMinimumInstances(service: Service) {
@@ -107,7 +104,6 @@ class Scaler(
         dockerService.pullImage(image).collect { pull ->
             val status = pull.statusText
 
-            // Top-level status messages (no layer id)
             if (pull.id == null) {
                 if (status.contains("up to date", ignoreCase = true) ||
                     status.contains("Status:", ignoreCase = true)
@@ -121,7 +117,6 @@ class Scaler(
             val id = pull.id ?: return@collect
             val layerId = id.take(12)
 
-            // Only log on status transitions to avoid spam
             if (layerStatus[id] == status) return@collect
             layerStatus[id] = status
 
@@ -130,7 +125,6 @@ class Scaler(
                     logger.info("  [{}] {}", layerId, status)
                 status == "Pulling fs layer" || status == "Waiting" ->
                     logger.debug("  [{}] {}", layerId, status)
-                // Skip "Downloading" / "Extracting" intermediate updates
             }
         }
 

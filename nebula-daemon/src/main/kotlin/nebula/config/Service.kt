@@ -5,15 +5,6 @@ data class Service(
     val image: String,
     val startPort: Int,
     val endPort: Int,
-    /**
-     * Whether each instance is tied to a stable identity (a "key") whose world must survive restarts.
-     *
-     * `false` (default) — pooled: instances are interchangeable, players are load-balanced across them,
-     * and the pool scales with player count (lobbies, gamemodes).
-     *
-     * `true` — keyed: exactly one instance per key (e.g. a player's SMP), started on demand, its world
-     * persisted across restarts, and never auto-deleted.
-     */
     val persistent: Boolean = false,
     val joiningBehavior: JoiningBehavior = JoiningBehavior.FILL_EXISTING,
     val environment: Map<String, String> = emptyMap(),

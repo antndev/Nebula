@@ -7,10 +7,6 @@ data class ScalingBehavior(
     val maxPlayersPerInstance: Int = 100,
     val warmReadyInstances: Int = 0,
     val scalingCooldownSeconds: Int = 30,
-    /**
-     * How long an empty instance is kept before it is scaled down, in seconds.
-     * `null` disables scale-down entirely — instances are never removed automatically.
-     */
     val scaleDownEmptyAfterSeconds: Int? = null,
 ) {
     init {

@@ -24,6 +24,5 @@ class ContextEvaluator(
         )
     }
 
-    // TODO: hostname-based routing (e.g. bedwars.example.com → bedwars-lobby)
     private fun resolveTargetService(): String = config.default
 }
