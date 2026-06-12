@@ -10,7 +10,7 @@ import nebula.service.ServiceInstanceStatus
 import nebula.service.ServiceRegistry
 import org.slf4j.LoggerFactory
 
-private const val SERVICE_CONTAINER_PORT: UShort = 25566u
+private const val SERVICE_CONTAINER_PORT: UShort = 25565u
 
 private const val LABEL_MANAGED = "nebula.managed"
 private const val LABEL_SERVICE = "nebula.service"

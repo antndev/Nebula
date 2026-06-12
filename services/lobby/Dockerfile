@@ -61,13 +61,13 @@ FROM gcr.io/distroless/base-debian12:nonroot
 
 ENV JAVA_HOME=/opt/java \
     PATH="/opt/java/bin:${PATH}" \
-    LOBBY_PORT=25566
+    LOBBY_PORT=25565
 
 WORKDIR /app
 
 COPY --from=build /opt/jre /opt/java
 COPY --from=build /workspace/services/lobby/build/install/lobby/lib /app/lib
 
-EXPOSE 25566
+EXPOSE 25565
 
 ENTRYPOINT ["/opt/java/bin/java", "--sun-misc-unsafe-memory-access=allow", "-cp", "/app/lib/*", "nebula.lobby.MainKt"]
