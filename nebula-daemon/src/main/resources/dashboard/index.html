@@ -120,6 +120,8 @@
     let currentPort = null;
 
     const allInstances = () => (lastState.services || []).flatMap(s => s.instances.map(i => ({ ...i, service: s.name })));
+    const instanceByPort = (port) => allInstances().find(i => i.hostPort === port);
+    const isModalOpen = () => !document.getElementById('modal').hidden;
 
     function statusBadge(s) {
       const cls = s === 'RUNNING' ? 'running' : s === 'STARTING' ? 'starting' : '';
@@ -140,10 +142,7 @@
       }
     }
 
-    function openDetail(port) {
-      const inst = allInstances().find(i => i.hostPort === port);
-      if (!inst) return;
-      currentPort = port;
+    function fillModal(inst) {
       document.getElementById('m-title').textContent = short(inst.containerId);
       const players = inst.players.map(p => esc(p.username)).join(', ') || '—';
       document.getElementById('m-body').innerHTML =
@@ -152,9 +151,22 @@
         '<div class="info-row"><span class="k">Container</span><span class="v mono">' + esc(inst.containerId) + '</span></div>' +
         '<div class="info-row"><span class="k">Host port</span><span class="v mono">' + inst.hostPort + '</span></div>' +
         '<div class="info-row"><span class="k">Players (' + inst.players.length + ')</span><span class="v">' + players + '</span></div>';
+    }
+
+    function openDetail(port) {
+      const inst = instanceByPort(port);
+      if (!inst) return;
+      currentPort = port;
+      fillModal(inst);
       document.getElementById('modal').hidden = false;
     }
     function closeModal() { document.getElementById('modal').hidden = true; currentPort = null; }
+
+    function refreshModal() {
+      if (currentPort == null || !isModalOpen()) return;
+      const inst = instanceByPort(currentPort);
+      if (inst) fillModal(inst);
+    }
 
     async function act(verb, btn) {
       if (currentPort == null) return;
@@ -162,14 +174,12 @@
       const label = btn.textContent;
       buttons.forEach(b => b.disabled = true);
       btn.textContent = '…';
-      const port = currentPort;
       try {
-        const url = verb === 'delete' ? '/api/instances/' + port : '/api/instances/' + port + '/' + verb;
+        const url = verb === 'delete' ? '/api/instances/' + currentPort : '/api/instances/' + currentPort + '/' + verb;
         const r = await fetch(url, { method: verb === 'delete' ? 'DELETE' : 'POST' });
         if (!r.ok) { alert(verb + ' failed (' + r.status + ')'); return; }
         await tick();
-        if (verb === 'delete') { closeModal(); return; }
-        openDetail(port);
+        if (verb === 'delete') closeModal();
       } finally {
         buttons.forEach(b => b.disabled = false);
         btn.textContent = label;
@@ -198,6 +208,8 @@
         '<td><span class="linkish" onclick="openDetail(' + p.port + ')">' + esc(short(p.container)) + '</span></td>' +
         '<td style="text-align:right"><button class="btn-kick" onclick="kick(\'' + esc(p.uuid) + '\', this)">Kick</button></td></tr>'
       ).join('') || '<tr><td colspan="5" class="empty">Nobody online.</td></tr>';
+
+      refreshModal();
     }
 
     async function tick() {
