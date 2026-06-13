@@ -1,7 +1,9 @@
 package nebula.sdk.minestom
 
+import nebula.protocol.Command
 import nebula.protocol.NebulaPlayer
 import nebula.sdk.core.NodeConnection
+import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.player.PlayerDisconnectEvent
@@ -24,6 +26,7 @@ object NebulaSdk {
             playersProvider = {
                 MinecraftServer.getConnectionManager().onlinePlayers.map { it.toNebulaPlayer() }
             },
+            onCommand = { command -> handle(command) },
         )
 
         val events = MinecraftServer.getGlobalEventHandler()
@@ -38,6 +41,16 @@ object NebulaSdk {
 
         connection.start()
         logger.info("Nebula SDK initialized.")
+    }
+
+    private fun handle(command: Command) {
+        when (command) {
+            is Command.Kick -> {
+                val player = MinecraftServer.getConnectionManager().onlinePlayers
+                    .find { it.uuid.toString() == command.uuid }
+                player?.kick(Component.text(command.reason ?: "Kicked by an administrator."))
+            }
+        }
     }
 
     private fun Player.toNebulaPlayer(): NebulaPlayer =

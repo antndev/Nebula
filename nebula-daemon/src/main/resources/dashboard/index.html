@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nebula</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0d;
+      --panel: #161618;
+      --panel-hover: #1c1c20;
+      --border: rgba(255,255,255,.08);
+      --text: #e7e7ea;
+      --muted: #8a8a92;
+      --faint: #56565e;
+      --accent: #00dc82;
+      --danger: #f3676c;
+      --amber: #e3a008;
+      --radius: 9px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      letter-spacing: -.05px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .content { padding: 28px 30px; max-width: 1040px; margin: 0 auto; }
+    .section-title { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin: 0 0 13px; }
+    section { margin-bottom: 34px; }
+
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { text-align: left; font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; padding: 11px 16px; border-bottom: 1px solid var(--border); }
+    tbody td { padding: 11px 16px; border-bottom: 1px solid var(--border); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--panel-hover); }
+    .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace; font-size: 12.5px; }
+    .row-click { cursor: pointer; }
+    .linkish { color: var(--accent); cursor: pointer; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; }
+
+    .badge { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 500; }
+    .badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+    .badge.running::before { background: var(--accent); }
+    .badge.starting::before { background: var(--amber); }
+
+    .btn, .btn-kick {
+      font: inherit; font-weight: 500; cursor: pointer;
+      transition: background .12s, border-color .12s, color .12s, transform .05s;
+    }
+    .btn:active, .btn-kick:active { transform: scale(.96); }
+    .btn:disabled, .btn-kick:disabled { opacity: .45; cursor: default; transform: none; }
+
+    .btn-kick { font-size: 12px; color: var(--muted); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; min-width: 56px; }
+    .btn-kick:hover:not(:disabled) { color: var(--danger); border-color: rgba(243,103,108,.5); background: rgba(243,103,108,.08); }
+    .empty { padding: 24px 16px; color: var(--faint); }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+    .modal-overlay[hidden] { display: none; }
+    .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; width: 460px; max-width: 100%; max-height: 85vh; overflow: auto; }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14.5px; }
+    .modal-head .x { background: none; border: none; color: var(--muted); font-size: 17px; cursor: pointer; line-height: 1; }
+    .modal-body { padding: 8px 20px 16px; }
+    .info-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .k { color: var(--muted); }
+    .info-row .v { text-align: right; word-break: break-all; }
+    .modal-actions { display: flex; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+    .btn { font-size: 13px; color: var(--text); background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 7px; padding: 7px 15px; min-width: 70px; }
+    .btn:hover:not(:disabled) { background: rgba(255,255,255,.09); }
+    .btn.danger { color: var(--danger); margin-left: auto; }
+    .btn.danger:hover:not(:disabled) { background: rgba(243,103,108,.1); border-color: rgba(243,103,108,.5); }
+  </style>
+</head>
+<body>
+  <main class="content">
+    <section>
+      <h2 class="section-title">Instances</h2>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Container</th><th>Service</th><th>Status</th><th>Players</th><th>Port</th></tr></thead>
+          <tbody id="instances-body"></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2 class="section-title">Online players</h2>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Player</th><th>UUID</th><th>Service</th><th>Instance</th><th></th></tr></thead>
+          <tbody id="players-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal-overlay" hidden onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-head"><span id="m-title" class="mono"></span><button class="x" onclick="closeModal()">&times;</button></div>
+      <div class="modal-body" id="m-body"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="act('start', this)">Start</button>
+        <button class="btn" onclick="act('stop', this)">Stop</button>
+        <button class="btn danger" onclick="act('delete', this)">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const short = (id) => String(id).slice(0, 12);
+    let lastState = { services: [] };
+    let currentPort = null;
+
+    const allInstances = () => (lastState.services || []).flatMap(s => s.instances.map(i => ({ ...i, service: s.name })));
+
+    function statusBadge(s) {
+      const cls = s === 'RUNNING' ? 'running' : s === 'STARTING' ? 'starting' : '';
+      return '<span class="badge ' + cls + '">' + esc(s.toLowerCase()) + '</span>';
+    }
+
+    async function kick(uuid, btn) {
+      btn.disabled = true;
+      btn.textContent = '…';
+      try {
+        const r = await fetch('/api/players/' + encodeURIComponent(uuid) + '/kick', { method: 'POST' });
+        if (!r.ok) throw new Error(r.status);
+        await tick();
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Kick';
+        alert('kick failed');
+      }
+    }
+
+    function openDetail(port) {
+      const inst = allInstances().find(i => i.hostPort === port);
+      if (!inst) return;
+      currentPort = port;
+      document.getElementById('m-title').textContent = short(inst.containerId);
+      const players = inst.players.map(p => esc(p.username)).join(', ') || '—';
+      document.getElementById('m-body').innerHTML =
+        '<div class="info-row"><span class="k">Service</span><span class="v">' + esc(inst.service) + '</span></div>' +
+        '<div class="info-row"><span class="k">Status</span><span class="v">' + statusBadge(inst.status) + '</span></div>' +
+        '<div class="info-row"><span class="k">Container</span><span class="v mono">' + esc(inst.containerId) + '</span></div>' +
+        '<div class="info-row"><span class="k">Host port</span><span class="v mono">' + inst.hostPort + '</span></div>' +
+        '<div class="info-row"><span class="k">Players (' + inst.players.length + ')</span><span class="v">' + players + '</span></div>';
+      document.getElementById('modal').hidden = false;
+    }
+    function closeModal() { document.getElementById('modal').hidden = true; currentPort = null; }
+
+    async function act(verb, btn) {
+      if (currentPort == null) return;
+      const buttons = [].slice.call(document.querySelectorAll('.modal-actions .btn'));
+      const label = btn.textContent;
+      buttons.forEach(b => b.disabled = true);
+      btn.textContent = '…';
+      const port = currentPort;
+      try {
+        const url = verb === 'delete' ? '/api/instances/' + port : '/api/instances/' + port + '/' + verb;
+        const r = await fetch(url, { method: verb === 'delete' ? 'DELETE' : 'POST' });
+        if (!r.ok) { alert(verb + ' failed (' + r.status + ')'); return; }
+        await tick();
+        if (verb === 'delete') { closeModal(); return; }
+        openDetail(port);
+      } finally {
+        buttons.forEach(b => b.disabled = false);
+        btn.textContent = label;
+      }
+    }
+
+    function render(state) {
+      lastState = state;
+      const instances = allInstances();
+      const players = [];
+      instances.forEach(i => i.players.forEach(p => players.push({ uuid: p.uuid, username: p.username, service: i.service, port: i.hostPort, container: i.containerId })));
+
+      document.getElementById('instances-body').innerHTML = instances.map(i =>
+        '<tr class="row-click" onclick="openDetail(' + i.hostPort + ')">' +
+        '<td class="mono" style="font-weight:500">' + esc(short(i.containerId)) + '</td>' +
+        '<td>' + esc(i.service) + '</td>' +
+        '<td>' + statusBadge(i.status) + '</td>' +
+        '<td>' + i.players.length + '</td>' +
+        '<td class="mono" style="color:var(--faint)">' + i.hostPort + '</td></tr>'
+      ).join('') || '<tr><td colspan="5" class="empty">No instances running.</td></tr>';
+
+      document.getElementById('players-body').innerHTML = players.map(p =>
+        '<tr><td style="font-weight:500">' + esc(p.username) + '</td>' +
+        '<td class="mono">' + esc(p.uuid) + '</td>' +
+        '<td>' + esc(p.service) + '</td>' +
+        '<td><span class="linkish" onclick="openDetail(' + p.port + ')">' + esc(short(p.container)) + '</span></td>' +
+        '<td style="text-align:right"><button class="btn-kick" onclick="kick(\'' + esc(p.uuid) + '\', this)">Kick</button></td></tr>'
+      ).join('') || '<tr><td colspan="5" class="empty">Nobody online.</td></tr>';
+    }
+
+    async function tick() {
+      try {
+        const r = await fetch('/api/state');
+        if (r.ok) render(await r.json());
+      } catch (e) {}
+    }
+    tick();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>

@@ -74,6 +74,12 @@ class DockerService(
         }
     }
 
+    suspend fun stopContainer(containerId: String) {
+        withContext(Dispatchers.IO) {
+            client.containers.stop(containerId)
+        }
+    }
+
     suspend fun inspectContainer(containerId: String) =
         withContext(Dispatchers.IO) {
             client.containers.inspect(containerId)

@@ -26,11 +26,11 @@ class Scaler(
     suspend fun reattach() {
         val containers = dockerService.listManagedContainers()
         if (containers.isEmpty()) {
-            logger.info("No existing managed containers found.")
+            logger.info("no existing managed containers found.")
             return
         }
 
-        logger.info("Reattaching {} existing managed container(s)...", containers.size)
+        logger.info("reattaching {} existing managed container(s)...", containers.size)
         for (container in containers) {
             registry.register(
                 ServiceInstance(
@@ -41,7 +41,7 @@ class Scaler(
                 )
             )
             logger.info(
-                "Reattached container {} as service '{}' on port {}.",
+                "reattached container {} as service '{}' on port {}.",
                 container.containerId.take(12),
                 container.serviceName,
                 container.hostPort,
@@ -50,7 +50,7 @@ class Scaler(
     }
 
     suspend fun bootstrap() {
-        logger.info("Bootstrapping {} service(s)...", config.services.size)
+        logger.info("bootstrapping {} service(s)...", config.services.size)
         config.services.forEach { service ->
             ensureMinimumInstances(service)
         }
@@ -73,7 +73,7 @@ class Scaler(
 
         if (missingInstances <= 0) {
             logger.info(
-                "Service '{}' has {} instance(s) running, minimum is {}. Nothing to do.",
+                "service '{}' has {} instance(s) running, minimum is {}. nothing to do.",
                 service.name,
                 currentInstances,
                 targetInstances,
@@ -82,7 +82,7 @@ class Scaler(
         }
 
         logger.info(
-            "Service '{}' is below its minimum instance count ({} < {}). Creating {} instance(s).",
+            "service '{}' is below its minimum instance count ({} < {}). creating {} instance(s).",
             service.name,
             currentInstances,
             targetInstances,
@@ -98,7 +98,7 @@ class Scaler(
         e is ImageNotFoundException || e.message?.contains("No such image", ignoreCase = true) == true
 
     private suspend fun pullImage(image: String) {
-        logger.info("Pulling image '{}'...", image)
+        logger.info("pulling image '{}'...", image)
 
         val layerStatus = mutableMapOf<String, String>()
         var upToDate = false
@@ -131,23 +131,23 @@ class Scaler(
         }
 
         if (!upToDate) {
-            logger.info("Image '{}' ready.", image)
+            logger.info("image '{}' ready.", image)
         }
     }
 
     private suspend fun createInstance(service: Service): ServiceInstance {
         val serviceMax = service.scaling.maxInstances
         check(serviceMax == null || registry.getActiveInstances(service.name).size < serviceMax) {
-            "Service '${service.name}' is already at its maximum instance count."
+            "service '${service.name}' is already at its maximum instance count."
         }
         check(registry.totalActiveInstances() < config.maxInstancesPerNode) {
-            "This node is already at its maximum of ${config.maxInstancesPerNode} instances."
+            "this node is already at its maximum of ${config.maxInstancesPerNode} instances."
         }
 
         val hostPort = registry.nextAvailablePort()
-            ?: error("No free host ports remain in the node port range.")
+            ?: error("no free host ports remain in the node port range.")
 
-        logger.info("Creating service instance '{}' on host port {}.", service.name, hostPort)
+        logger.info("creating service instance '{}' on host port {}.", service.name, hostPort)
         val request = CreateContainerRequest(
             image = service.image,
             containerPort = SERVICE_CONTAINER_PORT,
@@ -168,7 +168,7 @@ class Scaler(
             dockerService.createAndStartContainer(request)
         } catch (e: Exception) {
             if (!isImageMissing(e)) throw e
-            logger.info("Image '{}' is not present locally.", service.image)
+            logger.info("image '{}' is not present locally.", service.image)
             pullImage(service.image)
             dockerService.createAndStartContainer(request)
         }
@@ -183,7 +183,7 @@ class Scaler(
         registry.register(instance)
 
         logger.info(
-            "Created service instance '{}' as container {} on port {}.",
+            "created service instance '{}' as container {} on port {}.",
             service.name,
             containerId.take(12),
             hostPort,

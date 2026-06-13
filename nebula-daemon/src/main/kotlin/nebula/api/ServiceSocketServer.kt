@@ -4,6 +4,7 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.pingPeriod
 import io.ktor.server.websocket.webSocket
@@ -11,9 +12,11 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.serialization.json.Json
 import nebula.config.Config
+import nebula.protocol.Command
 import nebula.protocol.ServiceMessage
 import nebula.service.ServiceRegistry
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
 class ServiceSocketServer(
@@ -22,6 +25,13 @@ class ServiceSocketServer(
 ) {
     private val logger = LoggerFactory.getLogger(ServiceSocketServer::class.java)
     private val json = Json { ignoreUnknownKeys = true }
+    private val sessions = ConcurrentHashMap<Int, DefaultWebSocketServerSession>()
+
+    suspend fun sendCommand(servicePort: Int, command: Command): Boolean {
+        val session = sessions[servicePort] ?: return false
+        session.send(Frame.Text(json.encodeToString(Command.serializer(), command)))
+        return true
+    }
 
     fun start() {
         val server = embeddedServer(CIO, port = config.managementPort) {
@@ -30,6 +40,7 @@ class ServiceSocketServer(
             }
             routing {
                 webSocket("/") {
+                    val session = this
                     var servicePort: Int? = null
                     try {
                         for (frame in incoming) {
@@ -37,15 +48,16 @@ class ServiceSocketServer(
                             when (val message = json.decodeFromString(ServiceMessage.serializer(), frame.readText())) {
                                 is ServiceMessage.Hello -> {
                                     servicePort = message.servicePort
+                                    sessions[message.servicePort] = session
                                     val known = registry.serviceConnected(message.servicePort, message.players)
                                     if (known) {
                                         logger.info(
-                                            "Service instance on port {} connected ({} player(s) online).",
+                                            "service instance on port {} connected ({} player(s) online).",
                                             message.servicePort,
                                             message.players.size,
                                         )
                                     } else {
-                                        logger.warn("Hello from unknown service port {}.", message.servicePort)
+                                        logger.warn("hello from unknown service port {}.", message.servicePort)
                                     }
                                 }
                                 is ServiceMessage.PlayerJoined -> servicePort?.let { port ->
@@ -53,7 +65,7 @@ class ServiceSocketServer(
                                     registry.playerJoined(port, message.player)
                                     if (previous != null && previous.hostPort != port) {
                                         logger.debug(
-                                            "Player '{}' ({}) moved from port {} to port {}.",
+                                            "player '{}' ({}) moved from port {} to port {}.",
                                             message.player.username,
                                             message.player.uuid,
                                             previous.hostPort,
@@ -61,7 +73,7 @@ class ServiceSocketServer(
                                         )
                                     } else {
                                         logger.info(
-                                            "Player '{}' ({}) joined the network on port {}.",
+                                            "player '{}' ({}) joined the network on port {}.",
                                             message.player.username,
                                             message.player.uuid,
                                             port,
@@ -73,23 +85,25 @@ class ServiceSocketServer(
                                     val still = registry.findPlayerInstance(message.uuid)
                                     if (still != null) {
                                         logger.debug(
-                                            "Player {} left instance on port {} (still on port {}).",
+                                            "player {} left instance on port {} (still on port {}).",
                                             message.uuid,
                                             port,
                                             still.hostPort,
                                         )
                                     } else {
-                                        logger.info("Player {} left the network (was on port {}).", message.uuid, port)
+                                        logger.info("player {} left the network (was on port {}).", message.uuid, port)
                                     }
                                 }
                             }
                         }
                     } catch (e: Exception) {
-                        logger.warn("Service socket error: {}", e.message)
+                        logger.warn("service socket error: {}", e.message)
                     } finally {
                         servicePort?.let { port ->
-                            registry.serviceDisconnected(port)
-                            logger.info("Service instance on port {} disconnected.", port)
+                            if (sessions.remove(port, session)) {
+                                registry.serviceDisconnected(port)
+                                logger.info("service instance on port {} disconnected.", port)
+                            }
                         }
                     }
                 }
@@ -97,6 +111,6 @@ class ServiceSocketServer(
         }
 
         server.start(wait = false)
-        logger.info("Service socket listening on port {}.", config.managementPort)
+        logger.info("service socket listening on port {}.", config.managementPort)
     }
 }

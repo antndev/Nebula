@@ -8,6 +8,7 @@ val targetJava = 25
 
 plugins {
     kotlin("jvm")
+    kotlin("plugin.serialization")
     application
 }
 
@@ -35,6 +36,8 @@ dependencies {
     implementation("io.ktor:ktor-server-cio:3.3.3")
     implementation("io.ktor:ktor-server-core:3.3.3")
     implementation("io.ktor:ktor-server-websockets:3.3.3")
+    implementation("io.ktor:ktor-server-content-negotiation:3.3.3")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.3")
 }
 
 application {

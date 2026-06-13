@@ -2,6 +2,6 @@ package nebula.service
 
 enum class ServiceInstanceStatus {
     STARTING,
-    READY,
+    RUNNING,
     STOPPED,
 }

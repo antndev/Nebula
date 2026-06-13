@@ -13,7 +13,7 @@ class ContextEvaluator(
     fun getTarget(): ServiceInstance {
         val serviceName = resolveTargetService()
         val service = services.firstOrNull { it.name == serviceName }
-            ?: error("Unknown service '$serviceName'.")
+            ?: error("unknown service '$serviceName'.")
         return registry.selectJoinTarget(service)
     }
 

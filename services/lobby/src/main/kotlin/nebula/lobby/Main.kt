@@ -6,6 +6,7 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerBlockBreakEvent
+import net.minestom.server.instance.LightingChunk
 import net.minestom.server.instance.block.Block
 import org.slf4j.LoggerFactory
 
@@ -18,6 +19,7 @@ fun main() {
     val server = MinecraftServer.init(Auth.Online())
     NebulaSdk.init()
     val instanceContainer = MinecraftServer.getInstanceManager().createInstanceContainer()
+    instanceContainer.setChunkSupplier(::LightingChunk)
 
     instanceContainer.setGenerator { unit ->
         unit.modifier().fillHeight(0, 1, Block.GRASS_BLOCK)
@@ -33,5 +35,5 @@ fun main() {
     }
 
     server.start("0.0.0.0", port)
-    logger.info("Lobby service started on port {} and accepts transferred players.", port)
+    logger.info("lobby service started on port {} and accepts transferred players.", port)
 }

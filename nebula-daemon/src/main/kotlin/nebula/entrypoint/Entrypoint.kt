@@ -5,7 +5,6 @@ import nebula.service.ServiceRegistry
 import net.kyori.adventure.text.Component
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
-import net.minestom.server.Auth
 import net.minestom.server.event.player.PlayerSpawnEvent
 import net.minestom.server.network.packet.server.common.TransferPacket
 import org.slf4j.LoggerFactory
@@ -16,7 +15,7 @@ class Entrypoint(config: Config, registry: ServiceRegistry) {
     private val transferHost = config.entrypointEvaluationBehavior.transferHost
 
     init {
-        val server = MinecraftServer.init(Auth.Online())
+        val server = MinecraftServer.init()
         val instanceContainer = MinecraftServer.getInstanceManager().createInstanceContainer()
 
         MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
@@ -30,7 +29,7 @@ class Entrypoint(config: Config, registry: ServiceRegistry) {
 
             val target = runCatching { contextEvaluator.getTarget() }.getOrElse { e ->
                 logger.error(
-                    "Failed to route player '{}' ({}): {}",
+                    "failed to route player '{}' ({}): {}",
                     event.player.username,
                     event.player.uuid,
                     e.message,
@@ -39,7 +38,7 @@ class Entrypoint(config: Config, registry: ServiceRegistry) {
                 return@addListener
             }
             logger.info(
-                "Player '{}' ({}) joined the entrypoint and was routed to service '{}' at {}:{} [container={}].",
+                "player '{}' ({}) joined the entrypoint and was routed to service '{}' at {}:{} [container={}].",
                 event.player.username,
                 event.player.uuid,
                 target.serviceName,
