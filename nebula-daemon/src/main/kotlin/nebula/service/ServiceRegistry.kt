@@ -33,7 +33,13 @@ class ServiceRegistry {
         update(hostPort) { it.copy(status = ServiceInstanceStatus.RUNNING, players = players) }
 
     fun serviceDisconnected(hostPort: Int) {
-        update(hostPort) { it.copy(status = ServiceInstanceStatus.STARTING, players = emptyList()) }
+        update(hostPort) { instance ->
+            if (instance.status == ServiceInstanceStatus.STOPPED) {
+                instance.copy(players = emptyList())
+            } else {
+                instance.copy(status = ServiceInstanceStatus.STARTING, players = emptyList())
+            }
+        }
     }
 
     fun playerJoined(hostPort: Int, player: NebulaPlayer) {

@@ -90,11 +90,12 @@ class AdminServer(
                 }
                 post("/api/instances/{port}/stop") {
                     val instance = instanceFor(call.parameters["port"]) ?: return@post call.respond(HttpStatusCode.NotFound)
+                    registry.setStatus(instance.hostPort, ServiceInstanceStatus.STOPPED)
                     val result = runCatching { dockerService.stopContainer(instance.containerId) }
                     if (result.isSuccess || result.exceptionOrNull() is ContainerAlreadyStoppedException) {
-                        registry.setStatus(instance.hostPort, ServiceInstanceStatus.STOPPED)
                         call.respond(HttpStatusCode.OK)
                     } else {
+                        registry.setStatus(instance.hostPort, ServiceInstanceStatus.RUNNING)
                         call.respond(HttpStatusCode.InternalServerError)
                     }
                 }
