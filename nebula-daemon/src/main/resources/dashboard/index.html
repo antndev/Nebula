@@ -134,7 +134,6 @@
       try {
         const r = await fetch('/api/players/' + encodeURIComponent(uuid) + '/kick', { method: 'POST' });
         if (!r.ok) throw new Error(r.status);
-        await tick();
       } catch (e) {
         btn.disabled = false;
         btn.textContent = 'Kick';
@@ -178,7 +177,6 @@
         const url = verb === 'delete' ? '/api/instances/' + currentPort : '/api/instances/' + currentPort + '/' + verb;
         const r = await fetch(url, { method: verb === 'delete' ? 'DELETE' : 'POST' });
         if (!r.ok) { alert(verb + ' failed (' + r.status + ')'); return; }
-        await tick();
         if (verb === 'delete') closeModal();
       } finally {
         buttons.forEach(b => b.disabled = false);
@@ -212,14 +210,17 @@
       refreshModal();
     }
 
-    async function tick() {
-      try {
-        const r = await fetch('/api/state');
-        if (r.ok) render(await r.json());
-      } catch (e) {}
+    function connect() {
+      const es = new EventSource('/api/stream');
+      es.onmessage = (e) => {
+        try { render(JSON.parse(e.data)); } catch (x) {}
+      };
+      es.onerror = () => {
+        es.close();
+        setTimeout(connect, 2000);
+      };
     }
-    tick();
-    setInterval(tick, 1000);
+    connect();
   </script>
 </body>
 </html>

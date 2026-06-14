@@ -38,6 +38,7 @@ dependencies {
     implementation("io.ktor:ktor-server-websockets:3.3.3")
     implementation("io.ktor:ktor-server-content-negotiation:3.3.3")
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.3")
+    implementation("io.ktor:ktor-server-sse:3.3.3")
 }
 
 application {

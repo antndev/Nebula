@@ -12,7 +12,11 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.server.sse.SSE
+import io.ktor.server.sse.sse
+import io.ktor.sse.ServerSentEvent
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import me.devnatan.dockerkt.resource.container.ContainerAlreadyStartedException
 import me.devnatan.dockerkt.resource.container.ContainerAlreadyStoppedException
 import nebula.docker.DockerService
@@ -44,13 +48,21 @@ class AdminServer(
     private val port: Int = 8080,
 ) {
     private val logger = LoggerFactory.getLogger(AdminServer::class.java)
+    private val json = Json { encodeDefaults = true }
 
     fun start() {
         val server = embeddedServer(CIO, port = port) {
             install(ContentNegotiation) { json() }
+            install(SSE)
             routing {
                 get("/api/state") {
                     call.respond(buildState())
+                }
+                sse("/api/stream") {
+                    send(ServerSentEvent(data = stateJson()))
+                    registry.changes.collect {
+                        send(ServerSentEvent(data = stateJson()))
+                    }
                 }
                 post("/api/players/{uuid}/kick") {
                     val uuid = call.parameters["uuid"]
@@ -98,6 +110,8 @@ class AdminServer(
         server.start(wait = false)
         logger.info("admin dashboard on http://localhost:{}.", port)
     }
+
+    private fun stateJson(): String = json.encodeToString(StateDto.serializer(), buildState())
 
     private fun instanceFor(portParam: String?): ServiceInstance? =
         portParam?.toIntOrNull()?.let { registry.instanceByPort(it) }

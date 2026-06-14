@@ -1,5 +1,8 @@
 package nebula.service
 
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import nebula.config.Config
 import nebula.config.JoiningBehavior
 import nebula.config.Service
@@ -12,13 +15,18 @@ import java.util.concurrent.CopyOnWriteArrayList
 class ServiceRegistry {
     private val instancesByService = ConcurrentHashMap<String, CopyOnWriteArrayList<ServiceInstance>>()
 
+    private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val changes: SharedFlow<Unit> = _changes
+
     fun register(instance: ServiceInstance) {
         instancesByService.values.forEach { it.removeIf { existing -> existing.hostPort == instance.hostPort } }
         instancesByService.computeIfAbsent(instance.serviceName) { CopyOnWriteArrayList() }.add(instance)
+        _changes.tryEmit(Unit)
     }
 
     fun deregister(serviceName: String, containerId: String) {
         instancesByService[serviceName]?.removeIf { it.containerId == containerId }
+        _changes.tryEmit(Unit)
     }
 
     fun serviceConnected(hostPort: Int, players: List<NebulaPlayer>): Boolean =
@@ -45,6 +53,7 @@ class ServiceRegistry {
             val index = instances.indexOfFirst { it.hostPort == hostPort }
             if (index != -1) {
                 instances[index] = transform(instances[index])
+                _changes.tryEmit(Unit)
                 return true
             }
         }
@@ -74,6 +83,7 @@ class ServiceRegistry {
 
     fun deregisterByPort(hostPort: Int) {
         instancesByService.values.forEach { it.removeIf { instance -> instance.hostPort == hostPort } }
+        _changes.tryEmit(Unit)
     }
 
     fun totalActiveInstances(): Int =
