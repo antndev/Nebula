@@ -30,7 +30,7 @@ docker build -f nebula-daemon/Dockerfile -t nebula-daemon:latest .
 Check 'daemon image build'
 
 Step 'starting daemon'
-docker run -d --name nebula-daemon -p 25565:25565 -p 7654:7654 -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock nebula-daemon:latest | Out-Null
+docker run -d --name nebula-daemon -p 25565:25565 -p 7654:7654 -v /var/run/docker.sock:/var/run/docker.sock nebula-daemon:latest | Out-Null
 Check 'docker run'
 
 Write-Host '==> daemon up -> join at localhost:25565   (Ctrl+C ends log view, daemon keeps running)' -ForegroundColor Green

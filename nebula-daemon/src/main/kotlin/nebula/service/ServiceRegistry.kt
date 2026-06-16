@@ -1,8 +1,5 @@
 package nebula.service
 
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import nebula.config.Config
 import nebula.config.JoiningBehavior
 import nebula.config.Service
@@ -15,31 +12,20 @@ import java.util.concurrent.CopyOnWriteArrayList
 class ServiceRegistry {
     private val instancesByService = ConcurrentHashMap<String, CopyOnWriteArrayList<ServiceInstance>>()
 
-    private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    val changes: SharedFlow<Unit> = _changes
-
     fun register(instance: ServiceInstance) {
         instancesByService.values.forEach { it.removeIf { existing -> existing.hostPort == instance.hostPort } }
         instancesByService.computeIfAbsent(instance.serviceName) { CopyOnWriteArrayList() }.add(instance)
-        _changes.tryEmit(Unit)
     }
 
     fun deregister(serviceName: String, containerId: String) {
         instancesByService[serviceName]?.removeIf { it.containerId == containerId }
-        _changes.tryEmit(Unit)
     }
 
     fun serviceConnected(hostPort: Int, players: List<NebulaPlayer>): Boolean =
         update(hostPort) { it.copy(status = ServiceInstanceStatus.RUNNING, players = players) }
 
     fun serviceDisconnected(hostPort: Int) {
-        update(hostPort) { instance ->
-            if (instance.status == ServiceInstanceStatus.STOPPED) {
-                instance.copy(players = emptyList())
-            } else {
-                instance.copy(status = ServiceInstanceStatus.STARTING, players = emptyList())
-            }
-        }
+        update(hostPort) { it.copy(status = ServiceInstanceStatus.STARTING, players = emptyList()) }
     }
 
     fun playerJoined(hostPort: Int, player: NebulaPlayer) {
@@ -59,7 +45,6 @@ class ServiceRegistry {
             val index = instances.indexOfFirst { it.hostPort == hostPort }
             if (index != -1) {
                 instances[index] = transform(instances[index])
-                _changes.tryEmit(Unit)
                 return true
             }
         }
@@ -79,18 +64,6 @@ class ServiceRegistry {
         instancesByService.values.flatten().find { instance ->
             instance.players.any { it.uuid == uuid }
         }
-
-    fun instanceByPort(hostPort: Int): ServiceInstance? =
-        instancesByService.values.flatten().find { it.hostPort == hostPort }
-
-    fun setStatus(hostPort: Int, status: ServiceInstanceStatus) {
-        update(hostPort) { it.copy(status = status) }
-    }
-
-    fun deregisterByPort(hostPort: Int) {
-        instancesByService.values.forEach { it.removeIf { instance -> instance.hostPort == hostPort } }
-        _changes.tryEmit(Unit)
-    }
 
     fun totalActiveInstances(): Int =
         instancesByService.values.sumOf { instances ->

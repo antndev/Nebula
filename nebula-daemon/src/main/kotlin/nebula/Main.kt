@@ -8,7 +8,6 @@ import nebula.config.EntrypointEvaluationBehavior
 import nebula.config.JoiningBehavior
 import nebula.config.ScalingBehavior
 import nebula.config.Service
-import nebula.api.AdminServer
 import nebula.api.ServiceSocketServer
 import nebula.docker.DockerService
 import nebula.entrypoint.Entrypoint
@@ -47,7 +46,6 @@ fun main() = runBlocking {
 
     val socketServer = ServiceSocketServer(config, registry)
     socketServer.start()
-    AdminServer(registry, socketServer, dockerService).start()
 
     scaler.reattach()
     scaler.bootstrap()
