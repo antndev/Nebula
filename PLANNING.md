@@ -1,113 +1,110 @@
-You define services in a config (or maybe a cleaner way, idk yet, just some
-way to configure stuff).
+# Nebula — planning
 
-By default, there is an entrypoint server on port `25565` to transfer players
-to a service when they join. This will not be used for transfers from a
-server, only as an entrypoint.
+Rough direction. Sections marked **decided** are settled; **open** ones are still idk-yet.
 
-Let's say, for example, you want a main lobby service. You would define it as
-`lobby`, define a Docker image, secrets, scaling behavior, when instances
-should be created, max players, etc.
+## entrypoint & routing
+- Port `25565` = the entrypoint, one per node. Used ONLY for the very first join — never
+  for server→server transfers.
+- Services are defined in config: docker image, scaling, max players, joining behavior,
+  `persistent` flag.
+- Routing = a default service + a hostname→service map, e.g.
+  `bedwars.example.com → bedwars-lobby`, `default → lobby`. *(open: config format / YAML)*
 
-Ports: `25565` is always reserved for the entrypoint itself. All service
-instances get their host ports from ONE fixed node range `32800-32899` —
-that's the fundamental hardcoded limit (100 servers per node). On top of that
-there's a lower configurable limit per node (3..100, default 50).
+## ports
+- `25565` reserved for the entrypoint.
+- Service instances get host ports from the fixed node range `32800-33799` — the hard limit
+  (1000/node). On top of that a configurable per-node cap (`3..1000`, default 50).
+- Inside the container every service listens on `25565` (own network namespace, no clash).
 
-For the entrypoint to know where players should land, you define its behavior
-like the following. The format, etc. may change; this only acts as a rough
-idea.
+## live channel (node ↔ servers) — decided
+Transport = **one WebSocket per server**, dialed OUT to its *local* daemon, kept open, both
+sides push instantly (that's the "live" part — no polling). Client = JDK `java.net.http`,
+daemon = Ktor, shared `nebula-protocol` sealed classes, no codegen. Redis later sits *behind*
+the daemon, it does not replace the socket.
 
-```yaml
-host:
-  name: "bedwars.example.com"
-  service: bedwars-lobby
+**Reliability:** within a live connection TCP gives ordered, lossless delivery — no message is
+silently dropped or reordered. A break is always noticed: a clean close (FIN/RST), or a
+WS-level **ping/pong heartbeat** for silent death (crash / cable / NAT timeout) → close →
+reconnect. On reconnect the `Status` snapshot resyncs, so deltas missed during the gap never
+cause drift. The heartbeat is **transport-level** (Ping/Pong frames), NOT an app message —
+keep it (tuned, not aggressive) for dead-connection detection.
 
-host:
-  name: "play.bedwars.example.com"
-  service: bedwars-gamemode
+Two message sets, named by **direction** — no abstract "Command"/"ServiceMessage" categories.
 
-default:
-  service: lobby
+### server → daemon  (`ServerToDaemon`)
+- `Status(servicePort, players)` — full snapshot, on connect + reconnect (NOT a heartbeat; live changes go via the deltas)
+- `Join(player)` — delta
+- `Leave(uuid)` — delta
+- *(later)* `TransferRequest(uuid, targetService)` — server-initiated transfer (NPC click)
+
+### daemon → server  (`DaemonToServer`)
+- `Kick(uuid, reason?)`
+- `Transfer(uuid, host, port, ticket)`
+- `Message(uuid, text)`  *(+ optional `Broadcast(text)`)*
+- *(later)* permission / rank updates
+
+### derived, NOT on the wire
+- instance *lifecycle* status (starting/running) → from the connection + the `Status` message
+- capacity / full → daemon computes it from presence + config
+- journey / audit trail → daemon-side (it mints every hop); redis later
+- secret → env `NEBULA_SECRET`
+
+### principles
+- two sealed roots, named by direction (`ServerToDaemon` / `DaemonToServer`) — the grouping IS the direction
+- snapshot + delta, never poll
+- derive lifecycle status, don't transmit it
+- stable `@SerialName` discriminators (wire survives class renames)
+- ignore unknown → an old server safely skips a new message
+- auth off-wire (local HMAC) → the channel stays fire-and-forget
+
+## transfers + tokens — decided
+Every transfer carries a token; the only tokenless door is the first entrypoint join. SMP
+access control is the server's native `whitelist.json`.
+
+Token = HMAC-signed, **stateless**, validated **locally** on the target (no daemon roundtrip):
+```
+claims = uuid
+       · target  : serviceId  (+ instanceId only for keyed/persistent services)
+       · source  : serviceId  (informational — UX "welcome back", audit)
+       · exp      (TTL ~30s, + optional iat)
+sig    = HMAC_SHA256(NEBULA_SECRET, claims)
 ```
 
-When a player gets transferred from the lobby to Bedwars, for example because
-they clicked on the Bedwars NPC, a packet is sent to the daemon to handle
-where they should go. Or maybe, if a server needs to be created, shortly after that, a
-packet gets sent to the lobby where the player is, and the lobby sends a
-Minecraft transfer packet to them for that target server.
+Flow:
+1. daemon decides routing → mints the ticket → `Transfer(uuid, host, port, ticket)` to the SOURCE server
+2. source: `storeCookie("nebula:ticket", ticket)` → fires the MC transfer packet to `(host, port)`
+3. client connects to the target instance
+4. target in `AsyncPlayerConfigurationEvent`: read cookie → check `sig` · `uuid == player` · `target == self` · `exp` → ok join, else disconnect
+5. entrypoint skips the check (front door)
 
-In addition, for security, a transfer object gets created in a DB, Redis, or
-some communication way, idk yet, to confirm that the transfer is valid so the
-target server can check if the player should be allowed to join. This also
-gets created when the player joins from the entrypoint,
-but obv. not when the player first joins the entrypoint.
+`source` is informational only — validation never depends on it. Routing policy ("may lobby
+send to bedwars?") is enforced by the daemon at mint time, not by the target.
 
-## decentralized / multi-proxy
+## services (generic) — decided
+No big `kind` enum, no class per gamemode. One generic `Service`; specifics come from config
+flags the daemon interprets. A new gamemode = a new config entry, not new code.
+Main flag: `persistent` (bool) = whether the world must be saved. SMPs are persistent, don't
+scale, and never auto-delete (`scaleDownEmptyAfterSeconds = null` = never).
 
-The whole thing should be decentralized as much as possible (multi-proxy). Every
-node runs its own daemon with an entrypoint. You join, and you get redirected —
-maybe to another node, or actually to the same node on a different port (so just a
-different service/server). Because of that the state can't just live in one node's
-memory anymore, it has to be shared somehow (DB / Redis / whatever, idk yet).
+## decentralized / multi-proxy — open
+Every node runs its own daemon + entrypoint; you join and get redirected — maybe to another
+node, maybe to the same node on a different port. State can't live in one node's memory →
+shared store (Redis: instances, telemetry via TTL heartbeats, transfer tokens). Daemon =
+node-agent (local docker) + one scheduler-leader (redis lock) deciding placement; per-node
+command queue executes. *(open: details)*
 
-## transfers + access
+## vanilla — open
+Want to run 100% vanilla servers too (the Mojang jar as a "foreign" service): telemetry via
+Server List Ping + RCON (no SDK), join via transfer + whitelist, leave via disconnect. An
+in-game transfer-out proxy is NOT mini (needs protocol termination + encryption) — defer it.
 
-There's a transfer token on *every* transfer, just for safety — even if it's only
-to another lobby. The only one without a token is the very first join on the
-entrypoint (like above).
-
-For SMPs the access control is just the normal whitelist of the server software
-itself.
-
-## services (keep it generic)
-
-No big "kind" enum and no class per gamemode. Just one general Service, and the
-specifics come from flags that the daemon interprets — not from separate classes. A
-new gamemode should just be a new config entry, not new code. It has to stay
-generic.
-
-The main flag is a bool `persistent` = whether the world has to be saved. SMPs are
-persistent, don't scale, and never get auto-deleted.
-
-## vanilla
-
-Want to be able to run 100% vanilla servers too (maybe through a small custom proxy,
-idk yet), because vanilla behaves differently from Paper in some edge cases.
-
-## live comms (node <-> servers)
-
-The telemetry / communication with the servers has to be LIVE, not polling every
-10s. I want real live data: who's on right now, how many, etc. — instantly.
-
-Over this channel we need:
-- presence: who joined, who left, which players are on
-- commands: queue join / queue leave, etc.
-- transfers: the node tells the server "send player X to server Y", and the server
-  sends a normal Minecraft transfer packet
-- live updates: e.g. a player just got a new rank -> it updates live
-- parties
-
-The servers are probably all in the same docker network for this (that's how I'd do
-it). Transport = **WebSocket**. Each server opens one websocket out to its *local* daemon
-and keeps it open; both sides push messages whenever, instantly — that's the "live"
-part. The server dials the daemon (not the other way around), so there's no inbound
-port on the container and it fits "servers only talk to their local daemon". The
-client is built into the JDK, the daemon side is Ktor — both Kotlin, sharing one
-`nebula-protocol` module of sealed-class messages, no codegen. Same transport now and
-long-term: Redis later is a separate layer *behind* the daemon, it does not replace
-the websocket.
+## player data (groups, perms, prefixes, rank colors) — open
+Decentralized + live updates. Storage tbd.
 
 ## first step (phase 1)
+Just the channel, nothing else: join → live presence (`Status` + `Join`/`Leave`) → the daemon
+pushes `Transfer` down → the server fires the MC transfer packet → the target validates the
+HMAC ticket. State stays in-memory behind a small interface, so switching to Redis later is an
+impl swap, not a rewrite. Player data comes later.
 
-Just the channel, nothing else yet: a player joins -> live presence (join / leave /
-count) -> the daemon can push a transfer command down -> the server fires the normal
-Minecraft transfer packet. State stays in-memory for now, behind a small interface so
-switching to Redis later is just an impl swap, not a rewrite. Storing ranks / player
-data comes later, not now.
-
-## player data (groups, perms, prefixes, rank colors)
-
-Need to store player rights / groups / which prefixes, rank colors, etc. — and it
-has to be decentralized and update live. How exactly we store this is still to
-figure out.
+Protocol delta for phase 1 = **two new `DaemonToServer` variants**: `Transfer`, `Message`.
