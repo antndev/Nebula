@@ -13,6 +13,7 @@ import nebula.docker.DockerService
 import nebula.entrypoint.Entrypoint
 import nebula.scaling.Scaler
 import nebula.service.ServiceRegistry
+import nebula.service.TransferService
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("NebulaD")
@@ -46,6 +47,7 @@ fun main() = runBlocking {
 
     val socketServer = ServiceSocketServer(config, registry)
     socketServer.start()
+    val transferService = TransferService(config, socketServer::sendCommand)
 
     scaler.reattach()
     scaler.bootstrap()
@@ -58,6 +60,6 @@ fun main() = runBlocking {
     }
 
     logger.info("starting the entrypoint...")
-    Entrypoint(config, registry)
+    Entrypoint(config, registry, transferService)
     logger.info("entrypoint started.")
 }
