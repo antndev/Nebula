@@ -54,9 +54,6 @@ class NodeConnection(
     }
 
     private suspend fun connectAndRun() {
-        while (outbox.tryReceive().isSuccess) {
-        }
-
         val closed = CompletableDeferred<Unit>()
         val socket = httpClient.newWebSocketBuilder()
             .buildAsync(URI.create("ws://$daemonHost:$daemonPort/"), listener(closed))
