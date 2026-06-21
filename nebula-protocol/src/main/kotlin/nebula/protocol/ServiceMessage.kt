@@ -28,4 +28,16 @@ sealed class ServiceMessage {
             require(uuid.isNotBlank()) { "uuid must not be blank." }
         }
     }
+
+    @Serializable
+    @SerialName("transfer_request")
+    data class TransferRequest(
+        val uuid: String,
+        val targetService: String,
+    ) : ServiceMessage() {
+        init {
+            require(uuid.isNotBlank()) { "uuid must not be blank." }
+            require(targetService.isNotBlank()) { "targetService must not be blank." }
+        }
+    }
 }

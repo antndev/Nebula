@@ -71,22 +71,13 @@ class Scaler(
         val currentInstances = registry.getActiveInstances(service.name).size
         val missingInstances = targetInstances - currentInstances
 
-        if (missingInstances <= 0) {
-            logger.info(
-                "service '{}' has {} instance(s) running, minimum is {}. nothing to do.",
-                service.name,
-                currentInstances,
-                targetInstances,
-            )
-            return
-        }
+        if (missingInstances <= 0) return
 
         logger.info(
-            "service '{}' is below its minimum instance count ({} < {}). creating {} instance(s).",
+            "scaling '{}' to minimum: {} -> {} instances.",
             service.name,
             currentInstances,
             targetInstances,
-            missingInstances,
         )
 
         repeat(missingInstances) {

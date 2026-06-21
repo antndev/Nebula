@@ -29,10 +29,10 @@ class Entrypoint(config: Config, registry: ServiceRegistry) {
 
             val target = runCatching { contextEvaluator.getTarget() }.getOrElse { e ->
                 logger.error(
-                    "failed to route player '{}' ({}): {}",
+                    "failed to route player '{}' ({})",
                     event.player.username,
                     event.player.uuid,
-                    e.message,
+                    e,
                 )
                 event.player.kick(Component.text("No servers are available right now. Please try again later."))
                 return@addListener

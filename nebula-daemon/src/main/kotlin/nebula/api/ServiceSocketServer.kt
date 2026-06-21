@@ -7,6 +7,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.pingPeriod
+import io.ktor.server.websocket.timeout
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
@@ -36,7 +37,8 @@ class ServiceSocketServer(
     fun start() {
         val server = embeddedServer(CIO, port = config.managementPort) {
             install(WebSockets) {
-                pingPeriod = 15.seconds
+                pingPeriod = 30.seconds
+                timeout = 90.seconds
             }
             routing {
                 webSocket("/") {
@@ -94,6 +96,14 @@ class ServiceSocketServer(
                                         logger.info("player {} left the network (was on port {}).", message.uuid, port)
                                     }
                                 }
+                                is ServiceMessage.TransferRequest -> servicePort?.let { port ->
+                                    logger.info(
+                                        "service on port {} requests transfer of {} to '{}'.",
+                                        port,
+                                        message.uuid,
+                                        message.targetService,
+                                    )
+                                }
                             }
                         }
                     } catch (e: Exception) {
@@ -102,7 +112,7 @@ class ServiceSocketServer(
                         servicePort?.let { port ->
                             if (sessions.remove(port, session)) {
                                 registry.serviceDisconnected(port)
-                                logger.info("service instance on port {} disconnected.", port)
+                                logger.info("service instance on port {} disconnected: {}.", port, session.closeReason.await())
                             }
                         }
                     }

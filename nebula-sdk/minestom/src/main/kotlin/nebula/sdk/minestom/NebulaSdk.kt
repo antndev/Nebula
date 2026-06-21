@@ -8,11 +8,15 @@ import net.minestom.server.MinecraftServer
 import net.minestom.server.entity.Player
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
+import net.minestom.server.network.packet.server.common.CookieStorePacket
+import net.minestom.server.network.packet.server.common.TransferPacket
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
 
 object NebulaSdk {
     private val logger = LoggerFactory.getLogger("NebulaSDK")
     private var initialized = false
+    private val expected = ConcurrentHashMap<String, Command.ExpectPlayer>()
 
     fun init() {
         if (initialized) return
@@ -40,7 +44,7 @@ object NebulaSdk {
         }
 
         connection.start()
-        logger.info("Nebula SDK initialized.")
+        logger.info("nebula sdk initialized.")
     }
 
     private fun handle(command: Command) {
@@ -49,6 +53,15 @@ object NebulaSdk {
                 val player = MinecraftServer.getConnectionManager().onlinePlayers
                     .find { it.uuid.toString() == command.uuid }
                 player?.kick(Component.text(command.reason ?: "Kicked by an administrator."))
+            }
+            is Command.ExpectPlayer -> {
+                expected[command.token] = command
+            }
+            is Command.Transfer -> {
+                val player = MinecraftServer.getConnectionManager().onlinePlayers
+                    .find { it.uuid.toString() == command.uuid } ?: return
+                player.sendPacket(CookieStorePacket("nebula:token", command.token.encodeToByteArray()))
+                player.sendPacket(TransferPacket(command.host, command.port))
             }
         }
     }
