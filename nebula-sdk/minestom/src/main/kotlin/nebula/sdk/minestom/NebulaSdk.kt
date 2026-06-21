@@ -43,7 +43,10 @@ object NebulaSdk {
             }.getOrNull()?.let { if (it.isEmpty()) null else String(it) }
             val entry = token?.let { expected.remove(it) }
             if (entry == null || entry.expiresAt < System.currentTimeMillis()) {
+                logger.warn("rejecting '{}': no valid transfer token.", player.username)
                 player.kick(Component.text("Please join through the network."))
+            } else {
+                logger.info("admitted '{}' ({}) via transfer token.", entry.profile.username, entry.profile.uuid)
             }
         }
         events.addListener(PlayerSpawnEvent::class.java) { event ->
@@ -68,6 +71,7 @@ object NebulaSdk {
             }
             is Command.ExpectPlayer -> {
                 expected[command.token] = command
+                logger.info("expecting '{}' ({}) via transfer.", command.profile.username, command.profile.uuid)
             }
             is Command.Transfer -> {
                 val player = MinecraftServer.getConnectionManager().onlinePlayers

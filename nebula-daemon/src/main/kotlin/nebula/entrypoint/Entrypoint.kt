@@ -8,6 +8,7 @@ import nebula.protocol.PlayerProfile
 import nebula.service.ServiceRegistry
 import nebula.service.TransferService
 import net.kyori.adventure.text.Component
+import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
@@ -21,7 +22,7 @@ class Entrypoint(config: Config, registry: ServiceRegistry, private val transfer
     private val scope = CoroutineScope(Dispatchers.IO)
 
     init {
-        val server = MinecraftServer.init()
+        val server = MinecraftServer.init(Auth.Online())
         val instanceContainer = MinecraftServer.getInstanceManager().createInstanceContainer()
 
         MinecraftServer.getGlobalEventHandler().addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
