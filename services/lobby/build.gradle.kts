@@ -10,7 +10,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":nebula-sdk:minestom"))
+    implementation(project(":nebula-sdk"))
     implementation("org.slf4j:slf4j-api:2.0.13")
     runtimeOnly("ch.qos.logback:logback-classic:1.5.32")
 }

@@ -25,7 +25,7 @@ repositories {
 }
 
 dependencies {
-    implementation(project(":nebula-protocol"))
+    implementation(project(":nebula-sdk"))
     implementation("me.devnatan:docker-kotlin:0.14.4")
     implementation("org.slf4j:slf4j-api:2.0.13")
     implementation("ch.qos.logback:logback-classic:1.5.32")
