@@ -56,7 +56,12 @@ class ServiceSocketServer(
                                     sessions[message.servicePort] = session
                                     val known = registry.serviceConnected(message.servicePort, message.players)
                                     if (known) {
-                                        logger.info("{} connected ({} players).", id(message.servicePort), message.players.size)
+                                        val count = message.players.size
+                                        if (count > 0) {
+                                            logger.info("{} connected ({} players).", id(message.servicePort), count)
+                                        } else {
+                                            logger.info("{} connected.", id(message.servicePort))
+                                        }
                                     } else {
                                         logger.warn("hello from unknown service port {}.", message.servicePort)
                                     }
