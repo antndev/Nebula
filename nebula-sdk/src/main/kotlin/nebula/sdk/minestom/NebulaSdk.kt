@@ -9,11 +9,9 @@ import net.minestom.server.entity.Player
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
-import net.minestom.server.network.packet.server.common.CookieStorePacket
 import net.minestom.server.network.packet.server.common.TransferPacket
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 object NebulaSdk {
     private val logger = LoggerFactory.getLogger("NebulaSDK")
@@ -38,15 +36,13 @@ object NebulaSdk {
         val events = MinecraftServer.getGlobalEventHandler()
         events.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
             val player = event.player
-            val token = runCatching {
-                player.playerConnection.fetchCookie("nebula:token").get(5, TimeUnit.SECONDS)
-            }.getOrNull()?.let { if (it.isEmpty()) null else String(it) }
-            val entry = token?.let { expected.remove(it) }
+            val uuid = player.uuid.toString()
+            val entry = expected.remove(uuid)
             if (entry == null || entry.expiresAt < System.currentTimeMillis()) {
-                logger.warn("rejecting '{}': no valid transfer token.", player.username)
+                logger.warn("rejecting '{}' ({}): not expected.", player.username, uuid)
                 player.kick(Component.text("Please join through the network."))
             } else {
-                logger.info("admitted '{}' ({}) via transfer token.", entry.profile.username, entry.profile.uuid)
+                logger.info("admitted '{}' ({}).", player.username, uuid)
             }
         }
         events.addListener(PlayerSpawnEvent::class.java) { event ->
@@ -70,13 +66,12 @@ object NebulaSdk {
                 player?.kick(Component.text(command.reason ?: "Kicked by an administrator."))
             }
             is Command.ExpectPlayer -> {
-                expected[command.token] = command
-                logger.info("expecting '{}' ({}) via transfer.", command.profile.username, command.profile.uuid)
+                expected[command.uuid] = command
+                logger.info("expecting {} via transfer.", command.uuid)
             }
             is Command.Transfer -> {
                 val player = MinecraftServer.getConnectionManager().onlinePlayers
                     .find { it.uuid.toString() == command.uuid } ?: return
-                player.sendPacket(CookieStorePacket("nebula:token", command.token.encodeToByteArray()))
                 player.sendPacket(TransferPacket(command.host, command.port))
             }
         }

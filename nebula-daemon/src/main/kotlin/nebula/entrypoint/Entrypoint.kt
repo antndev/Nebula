@@ -4,7 +4,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import nebula.config.Config
-import nebula.protocol.PlayerProfile
 import nebula.service.ServiceRegistry
 import nebula.service.TransferService
 import net.kyori.adventure.text.Component
@@ -12,7 +11,6 @@ import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerSpawnEvent
-import net.minestom.server.network.packet.server.common.CookieStorePacket
 import net.minestom.server.network.packet.server.common.TransferPacket
 import org.slf4j.LoggerFactory
 
@@ -39,7 +37,6 @@ class Entrypoint(config: Config, registry: ServiceRegistry, private val transfer
                 player.kick(Component.text("No servers are available right now. Please try again later."))
                 return@addListener
             }
-            transferService.rememberIdentity(PlayerProfile(player.uuid.toString(), player.username))
             scope.launch {
                 val transfer = transferService.prepareTransfer(player.uuid.toString(), target)
                 if (transfer == null) {
@@ -53,7 +50,6 @@ class Entrypoint(config: Config, registry: ServiceRegistry, private val transfer
                     "${target.serviceName}:${transfer.port}",
                     target.containerId.take(12),
                 )
-                player.sendPacket(CookieStorePacket("nebula:token", transfer.token.encodeToByteArray()))
                 player.sendPacket(TransferPacket(transfer.host, transfer.port))
             }
         }
