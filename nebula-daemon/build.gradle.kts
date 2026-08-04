@@ -31,7 +31,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.5.32")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-    implementation("net.minestom:minestom:26_1-SNAPSHOT")
+    implementation("net.minestom:minestom:26_2-SNAPSHOT")
     implementation("io.ktor:ktor-server-cio:3.3.3")
     implementation("io.ktor:ktor-server-core:3.3.3")
     implementation("io.ktor:ktor-server-websockets:3.3.3")
