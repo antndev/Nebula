@@ -34,6 +34,9 @@ class ServiceSocketServer(
         return true
     }
 
+    private fun id(hostPort: Int): String =
+        registry.instanceByPort(hostPort)?.let { "${it.serviceName}:$hostPort" } ?: "?:$hostPort"
+
     fun start() {
         val server = embeddedServer(CIO, port = config.managementPort) {
             install(WebSockets) {
@@ -53,11 +56,7 @@ class ServiceSocketServer(
                                     sessions[message.servicePort] = session
                                     val known = registry.serviceConnected(message.servicePort, message.players)
                                     if (known) {
-                                        logger.info(
-                                            "service instance on port {} connected ({} player(s) online).",
-                                            message.servicePort,
-                                            message.players.size,
-                                        )
+                                        logger.info("{} connected ({} players).", id(message.servicePort), message.players.size)
                                     } else {
                                         logger.warn("hello from unknown service port {}.", message.servicePort)
                                     }
@@ -66,43 +65,22 @@ class ServiceSocketServer(
                                     val previous = registry.findPlayerInstance(message.player.uuid)
                                     registry.playerJoined(port, message.player)
                                     if (previous != null && previous.hostPort != port) {
-                                        logger.debug(
-                                            "player '{}' ({}) moved from port {} to port {}.",
-                                            message.player.username,
-                                            message.player.uuid,
-                                            previous.hostPort,
-                                            port,
-                                        )
+                                        logger.debug("{} moved {} -> {}.", message.player.username, id(previous.hostPort), id(port))
                                     } else {
-                                        logger.info(
-                                            "player '{}' ({}) joined the network on port {}.",
-                                            message.player.username,
-                                            message.player.uuid,
-                                            port,
-                                        )
+                                        logger.info("{} joined {}.", message.player.username, id(port))
                                     }
                                 }
                                 is ServiceMessage.PlayerLeft -> servicePort?.let { port ->
                                     registry.playerLeft(port, message.uuid)
                                     val still = registry.findPlayerInstance(message.uuid)
                                     if (still != null) {
-                                        logger.debug(
-                                            "player {} left instance on port {} (still on port {}).",
-                                            message.uuid,
-                                            port,
-                                            still.hostPort,
-                                        )
+                                        logger.debug("{} left {} (still on {}).", message.uuid, id(port), id(still.hostPort))
                                     } else {
-                                        logger.info("player {} left the network (was on port {}).", message.uuid, port)
+                                        logger.info("{} left {}.", message.uuid, id(port))
                                     }
                                 }
                                 is ServiceMessage.TransferRequest -> servicePort?.let { port ->
-                                    logger.info(
-                                        "service on port {} requests transfer of {} to '{}'.",
-                                        port,
-                                        message.uuid,
-                                        message.targetService,
-                                    )
+                                    logger.info("{} requests transfer of {} to '{}'.", id(port), message.uuid, message.targetService)
                                 }
                             }
                         }
@@ -112,7 +90,7 @@ class ServiceSocketServer(
                         servicePort?.let { port ->
                             if (sessions.remove(port, session)) {
                                 registry.serviceDisconnected(port)
-                                logger.info("service instance on port {} disconnected: {}.", port, session.closeReason.await())
+                                logger.info("{} disconnected: {}.", id(port), session.closeReason.await())
                             }
                         }
                     }

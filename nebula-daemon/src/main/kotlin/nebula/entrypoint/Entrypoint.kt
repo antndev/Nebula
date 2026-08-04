@@ -47,12 +47,10 @@ class Entrypoint(config: Config, registry: ServiceRegistry, private val transfer
                     return@launch
                 }
                 logger.info(
-                    "player '{}' ({}) routed to '{}' at {}:{} [container={}].",
+                    "routed {} ({}) -> {} [{}].",
                     player.username,
                     player.uuid,
-                    target.serviceName,
-                    transfer.host,
-                    transfer.port,
+                    "${target.serviceName}:${transfer.port}",
                     target.containerId.take(12),
                 )
                 player.sendPacket(CookieStorePacket("nebula:token", transfer.token.encodeToByteArray()))

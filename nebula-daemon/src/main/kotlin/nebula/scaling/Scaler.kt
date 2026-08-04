@@ -40,12 +40,7 @@ class Scaler(
                     status = ServiceInstanceStatus.STARTING,
                 )
             )
-            logger.info(
-                "reattached container {} as service '{}' on port {}.",
-                container.containerId.take(12),
-                container.serviceName,
-                container.hostPort,
-            )
+            logger.info("reattached {} (container {}).", "${container.serviceName}:${container.hostPort}", container.containerId.take(12))
         }
     }
 
@@ -138,7 +133,7 @@ class Scaler(
         val hostPort = registry.nextAvailablePort()
             ?: error("no free host ports remain in the node port range.")
 
-        logger.info("creating service instance '{}' on host port {}.", service.name, hostPort)
+        logger.info("creating {}.", "${service.name}:$hostPort")
         val request = CreateContainerRequest(
             image = service.image,
             containerPort = SERVICE_CONTAINER_PORT,
@@ -173,12 +168,7 @@ class Scaler(
 
         registry.register(instance)
 
-        logger.info(
-            "created service instance '{}' as container {} on port {}.",
-            service.name,
-            containerId.take(12),
-            hostPort,
-        )
+        logger.info("created {} (container {}).", "${service.name}:$hostPort", containerId.take(12))
 
         return instance
     }

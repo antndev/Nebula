@@ -65,6 +65,9 @@ class ServiceRegistry {
             instance.players.any { it.uuid == uuid }
         }
 
+    fun instanceByPort(hostPort: Int): ServiceInstance? =
+        instancesByService.values.flatten().find { it.hostPort == hostPort }
+
     fun totalActiveInstances(): Int =
         instancesByService.values.sumOf { instances ->
             instances.count { it.status != ServiceInstanceStatus.STOPPED }
