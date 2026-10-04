@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("NebulaD")
 
+private const val RECONCILE_INTERVAL_MS = 10_000L
+
 fun main() = runBlocking {
     val config = Config(
         entrypointEvaluationBehavior = EntrypointEvaluationBehavior(
@@ -47,15 +49,16 @@ fun main() = runBlocking {
 
     val socketServer = ServiceSocketServer(config, registry)
     socketServer.start()
-    val transferService = TransferService(config, socketServer::sendCommand)
+    val transferService = TransferService(config, registry, socketServer::sendCommand)
 
     scaler.reattach()
     scaler.bootstrap()
 
     launch {
         while (true) {
-            delay(30_000)
-            scaler.reconcileAllServices()
+            delay(RECONCILE_INTERVAL_MS)
+            runCatching { scaler.reconcileAllServices() }
+                .onFailure { logger.error("reconcile failed: {}", it.toString()) }
         }
     }
 

@@ -19,6 +19,7 @@ data class CreateContainerRequest(
     val bindIp: String = "0.0.0.0",
     val labels: Map<String, String> = emptyMap(),
     val env: Map<String, String> = emptyMap(),
+    val extraHosts: List<String> = emptyList(),
 )
 
 data class ManagedContainer(
@@ -55,14 +56,18 @@ class DockerService(
                     command = request.command
                 }
 
-                request.containerPort?.let { containerPort ->
-                    exposedPort(containerPort)
+                request.containerPort?.let { exposedPort(it) }
 
-                    request.hostPort?.let { hostPort ->
-                        hostConfig {
-                            portBindings(containerPort) {
-                                add(PortBinding(ip = request.bindIp, port = hostPort))
-                            }
+                hostConfig {
+                    if (request.extraHosts.isNotEmpty()) {
+                        extraHosts = request.extraHosts
+                    }
+
+                    val containerPort = request.containerPort
+                    val hostPort = request.hostPort
+                    if (containerPort != null && hostPort != null) {
+                        portBindings(containerPort) {
+                            add(PortBinding(ip = request.bindIp, port = hostPort))
                         }
                     }
                 }

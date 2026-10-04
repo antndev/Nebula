@@ -9,6 +9,8 @@ data class ServiceInstance(
     val token: String,
     val status: ServiceInstanceStatus = ServiceInstanceStatus.STARTING,
     val players: List<NebulaPlayer> = emptyList(),
+    val statusSince: Long = System.currentTimeMillis(),
+    val lastActiveAt: Long = System.currentTimeMillis(),
 ) {
     val connectedPlayers: Int
         get() = players.size

@@ -10,8 +10,11 @@ import nebula.service.ServiceInstanceStatus
 import nebula.service.ServiceRegistry
 import org.slf4j.LoggerFactory
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 private const val SERVICE_CONTAINER_PORT: UShort = 25565u
+private const val STARTUP_TIMEOUT_MS = 120_000L
+private const val DOCKER_HOST_GATEWAY = "host.docker.internal:host-gateway"
 
 private const val LABEL_MANAGED = "nebula.managed"
 private const val LABEL_SERVICE = "nebula.service"
@@ -24,6 +27,7 @@ class Scaler(
     private val registry: ServiceRegistry,
 ) {
     private val logger = LoggerFactory.getLogger(Scaler::class.java)
+    private val lastScaledAt = ConcurrentHashMap<String, Long>()
 
     suspend fun reattach() {
         val containers = dockerService.listManagedContainers()
@@ -58,39 +62,79 @@ class Scaler(
 
     suspend fun bootstrap() {
         logger.info("bootstrapping {} service(s)...", config.services.size)
-        config.services.forEach { service ->
-            ensureMinimumInstances(service)
-        }
+        reconcileAllServices()
     }
 
     suspend fun reconcileAllServices() {
+        removeDeadInstances()
         config.services.forEach { service ->
-            reconcileService(service)
+            runCatching { reconcileService(service) }
+                .onFailure { logger.error("reconciling '{}' failed: {}", service.name, it.message) }
         }
     }
 
-    suspend fun reconcileService(service: Service) {
-        ensureMinimumInstances(service)
-    }
+    private suspend fun removeDeadInstances() {
+        val containers = dockerService.listManagedContainers()
+        val alive = containers.map { it.containerId }.toSet()
+        val unknown = containers.filter { registry.instanceByContainer(it.containerId) == null }
+        val now = System.currentTimeMillis()
 
-    private suspend fun ensureMinimumInstances(service: Service) {
-        val targetInstances = service.scaling.minInstances
-        val currentInstances = registry.getActiveInstances(service.name).size
-        val missingInstances = targetInstances - currentInstances
+        for (instance in registry.snapshot().values.flatten()) {
+            val reason = when {
+                instance.containerId !in alive -> "container is gone"
+                instance.status == ServiceInstanceStatus.STARTING && now - instance.statusSince > STARTUP_TIMEOUT_MS ->
+                    "not connected for ${STARTUP_TIMEOUT_MS / 1000}s"
+                else -> continue
+            }
+            logger.warn("removing {} (container {}): {}.", id(instance), instance.containerId.take(12), reason)
+            removeInstance(instance)
+        }
 
-        if (missingInstances <= 0) return
-
-        logger.info(
-            "scaling '{}' to minimum: {} -> {} instances.",
-            service.name,
-            currentInstances,
-            targetInstances,
-        )
-
-        repeat(missingInstances) {
-            createInstance(service)
+        for (container in unknown) {
+            logger.warn(
+                "removing unknown container {} ({}:{}).",
+                container.containerId.take(12),
+                container.serviceName,
+                container.hostPort,
+            )
+            runCatching { dockerService.removeContainer(container.containerId) }
         }
     }
+
+    private suspend fun reconcileService(service: Service) {
+        val now = System.currentTimeMillis()
+        val active = registry.getActiveInstances(service.name)
+        val decision = ScalingPolicy.decide(service.scaling, active, now, lastScaledAt[service.name] ?: 0L)
+
+        when (decision) {
+            is ScalingDecision.Start -> {
+                logger.info(
+                    "scaling '{}' up: {} -> {} instances ({}).",
+                    service.name,
+                    active.size,
+                    active.size + decision.count,
+                    decision.reason,
+                )
+                lastScaledAt[service.name] = now
+                repeat(decision.count) { createInstance(service) }
+            }
+            is ScalingDecision.Stop -> {
+                logger.info("scaling '{}' down: stopping {} ({}).", service.name, id(decision.instance), decision.reason)
+                lastScaledAt[service.name] = now
+                removeInstance(decision.instance)
+            }
+            ScalingDecision.Keep -> Unit
+        }
+    }
+
+    private suspend fun removeInstance(instance: ServiceInstance) {
+        registry.markStopped(instance.hostPort)
+        runCatching { dockerService.removeContainer(instance.containerId) }
+            .onFailure { logger.debug("container {} was already gone: {}", instance.containerId.take(12), it.message) }
+        registry.deregister(instance.serviceName, instance.containerId)
+    }
+
+    private fun id(instance: ServiceInstance): String = "${instance.serviceName}:${instance.hostPort}"
 
     private fun isImageMissing(e: Exception): Boolean =
         e is ImageNotFoundException || e.message?.contains("No such image", ignoreCase = true) == true
@@ -163,6 +207,7 @@ class Scaler(
                 "NEBULA_SERVICE_PORT" to hostPort.toString(),
                 "NEBULA_TOKEN" to token,
             ),
+            extraHosts = listOf(DOCKER_HOST_GATEWAY),
         )
 
         val containerId = try {

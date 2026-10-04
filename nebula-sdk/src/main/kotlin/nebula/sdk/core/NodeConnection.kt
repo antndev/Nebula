@@ -43,7 +43,7 @@ class NodeConnection(
         scope.launch {
             while (isActive) {
                 runCatching { connectAndRun() }.onFailure { e ->
-                    logger.warn("connection to node failed: {}", e.message)
+                    logger.warn("connection to node failed: {}", e.toString())
                 }
                 delay(reconnectDelaySeconds * 1_000)
             }

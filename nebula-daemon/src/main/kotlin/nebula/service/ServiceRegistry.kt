@@ -12,34 +12,69 @@ import java.util.concurrent.CopyOnWriteArrayList
 class ServiceRegistry {
     private val instancesByService = ConcurrentHashMap<String, CopyOnWriteArrayList<ServiceInstance>>()
 
+    @Synchronized
     fun register(instance: ServiceInstance) {
         instancesByService.values.forEach { it.removeIf { existing -> existing.hostPort == instance.hostPort } }
         instancesByService.computeIfAbsent(instance.serviceName) { CopyOnWriteArrayList() }.add(instance)
     }
 
+    @Synchronized
     fun deregister(serviceName: String, containerId: String) {
         instancesByService[serviceName]?.removeIf { it.containerId == containerId }
     }
 
     fun serviceConnected(hostPort: Int, players: List<NebulaPlayer>): Boolean =
-        update(hostPort) { it.copy(status = ServiceInstanceStatus.RUNNING, players = players) }
+        update(hostPort) {
+            val now = System.currentTimeMillis()
+            it.copy(
+                status = ServiceInstanceStatus.RUNNING,
+                players = players,
+                statusSince = now,
+                lastActiveAt = maxOf(it.lastActiveAt, now),
+            )
+        }
 
     fun serviceDisconnected(hostPort: Int) {
-        update(hostPort) { it.copy(status = ServiceInstanceStatus.STARTING, players = emptyList()) }
+        update(hostPort) {
+            if (it.status == ServiceInstanceStatus.STOPPED) {
+                it
+            } else {
+                it.copy(
+                    status = ServiceInstanceStatus.STARTING,
+                    players = emptyList(),
+                    statusSince = System.currentTimeMillis(),
+                )
+            }
+        }
+    }
+
+    fun markStopped(hostPort: Int) {
+        update(hostPort) { it.copy(status = ServiceInstanceStatus.STOPPED, statusSince = System.currentTimeMillis()) }
+    }
+
+    fun playerExpected(hostPort: Int, until: Long) {
+        update(hostPort) { it.copy(lastActiveAt = maxOf(it.lastActiveAt, until)) }
     }
 
     fun playerJoined(hostPort: Int, player: NebulaPlayer) {
         update(hostPort) { instance ->
-            instance.copy(players = instance.players.filterNot { it.uuid == player.uuid } + player)
+            instance.copy(
+                players = instance.players.filterNot { it.uuid == player.uuid } + player,
+                lastActiveAt = maxOf(instance.lastActiveAt, System.currentTimeMillis()),
+            )
         }
     }
 
     fun playerLeft(hostPort: Int, uuid: String) {
         update(hostPort) { instance ->
-            instance.copy(players = instance.players.filterNot { it.uuid == uuid })
+            instance.copy(
+                players = instance.players.filterNot { it.uuid == uuid },
+                lastActiveAt = maxOf(instance.lastActiveAt, System.currentTimeMillis()),
+            )
         }
     }
 
+    @Synchronized
     private fun update(hostPort: Int, transform: (ServiceInstance) -> ServiceInstance): Boolean {
         for (instances in instancesByService.values) {
             val index = instances.indexOfFirst { it.hostPort == hostPort }
@@ -68,6 +103,9 @@ class ServiceRegistry {
     fun instanceByPort(hostPort: Int): ServiceInstance? =
         instancesByService.values.flatten().find { it.hostPort == hostPort }
 
+    fun instanceByContainer(containerId: String): ServiceInstance? =
+        instancesByService.values.flatten().find { it.containerId == containerId }
+
     fun totalActiveInstances(): Int =
         instancesByService.values.sumOf { instances ->
             instances.count { it.status != ServiceInstanceStatus.STOPPED }
@@ -75,7 +113,6 @@ class ServiceRegistry {
 
     fun nextAvailablePort(): Int? {
         val usedPorts = instancesByService.values.flatten()
-            .filter { it.status != ServiceInstanceStatus.STOPPED }
             .map { it.hostPort }
             .toSet()
         return Config.NODE_PORT_RANGE.firstOrNull { it !in usedPorts && isPortFree(it) }
@@ -85,20 +122,12 @@ class ServiceRegistry {
         runCatching { ServerSocket().use { it.bind(InetSocketAddress(port)) } }.isSuccess
 
     fun selectJoinTarget(service: Service): ServiceInstance {
-        val candidates = getJoinableInstances(service)
+        val candidates = getInstances(service.name).filter {
+            it.status == ServiceInstanceStatus.RUNNING && it.connectedPlayers < service.scaling.maxPlayersPerInstance
+        }
         return when (service.joiningBehavior) {
             JoiningBehavior.FILL_EXISTING -> candidates.maxByOrNull { it.connectedPlayers }
             JoiningBehavior.LEAST_PLAYERS -> candidates.minByOrNull { it.connectedPlayers }
         } ?: error("no joinable instances are available for service '${service.name}'.")
-    }
-
-    private fun getJoinableInstances(service: Service): List<ServiceInstance> {
-        val ready = getInstances(service.name)
-            .filter { it.status == ServiceInstanceStatus.RUNNING && it.connectedPlayers < service.scaling.maxPlayersPerInstance }
-
-        if (ready.isNotEmpty()) return ready
-
-        return getInstances(service.name)
-            .filter { it.status == ServiceInstanceStatus.STARTING && it.connectedPlayers < service.scaling.maxPlayersPerInstance }
     }
 }

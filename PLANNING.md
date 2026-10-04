@@ -84,10 +84,31 @@ kept as container label `nebula.token` so it survives a daemon restart). `Hello`
 otherwise the socket is closed (`1008`) and a running session is never replaced. Containers from
 an older daemon without a token are removed on reattach and recreated.
 
-## instance lifecycle — open
-Today an instance is only "alive" while its socket is connected; a crashed container is never
-noticed and never replaced. Proposal: Docker (inspect/events) is the source of truth for "the
-container lives", the socket for "ready + who is on it".
+## instance lifecycle — decided
+Docker is the source of truth for "the container lives", the live channel for "ready + who is on
+it". Every 10s the daemon reconciles:
+- a registered instance whose container isn't running anymore → removed + recreated if needed
+- an instance that stays `STARTING` (no `Hello`) for 120s → removed (hung, bad image, no network)
+- a running `nebula.managed` container the registry doesn't know → removed
+- statuses: `STARTING` (created / disconnected) → `RUNNING` (valid `Hello`) → `STOPPED` (being
+  removed; a late disconnect never flips it back)
+
+Containers get `host.docker.internal:host-gateway` as extra host, so the live channel also works on
+plain Linux Docker, not only Docker Desktop.
+
+Known gap: an image that crashes on start is recreated every 10s (no backoff yet).
+
+## scaling — decided
+Per service, one decision per reconcile (`ScalingPolicy`, pure, no Docker):
+- below `minInstances` → start the missing ones right away (no cooldown)
+- "spare" = instances below `playersToScaleUp` players (a `STARTING` one counts). Fewer spare than
+  `warmReadyInstances` → start one more, at most `maxInstances`, at most once per
+  `scalingCooldownSeconds`. `warmReadyInstances = 0` → never above `minInstances`.
+- an instance that is `RUNNING`, empty and idle for `scaleDownEmptyAfterSeconds` is stopped (the one
+  idle longest), but only if `minInstances` and the warm spare still hold afterwards. `null` = never.
+- a sent `ExpectPlayer` counts as activity until it expires → no instance is stopped while a player
+  is on the way to it.
+- routing only picks `RUNNING` instances with room (`maxPlayersPerInstance`).
 
 ## services (generic) — decided
 No big `kind` enum, no class per gamemode. One generic `Service`; specifics come from config flags
@@ -117,13 +138,14 @@ SQLite first, Postgres later). Decide before parties/groups — it shapes the pr
 
 ## status
 **Phase 1 (the channel) — done:** entrypoint → `ExpectPlayer` → transfer → allowlist check, live
-presence (`Hello` / `PlayerJoined` / `PlayerLeft`), reattach running containers, minimum instances,
-version handshake + per-container token on the live channel.
+presence (`Hello` / `PlayerJoined` / `PlayerLeft`), reattach running containers, version handshake +
+per-container token on the live channel.
+
+**Phase 2 (a node that heals itself) — done:** dead / hung / unknown containers are detected and
+replaced, scaling up (warm spare) and down (idle) per service config.
 
 **Next, in order:**
-1. detect dead containers + real scaling (scale up at `playersToScaleUp`, warm instances, cooldown,
-   scale down empty)
-2. config file instead of `Main.kt`
-3. second service + backend → backend transfer (`TransferRequest` → daemon → `Transfer`)
-4. player data → groups / parties
-5. multi-node
+1. config file instead of `Main.kt`
+2. second service + backend → backend transfer (`TransferRequest` → daemon → `Transfer`)
+3. player data → groups / parties
+4. multi-node
