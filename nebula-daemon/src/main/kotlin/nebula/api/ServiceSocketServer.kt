@@ -9,14 +9,19 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.pingPeriod
 import io.ktor.server.websocket.timeout
 import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.serialization.json.Json
 import nebula.config.Config
 import nebula.protocol.Command
+import nebula.protocol.NebulaProtocol
 import nebula.protocol.ServiceMessage
 import nebula.service.ServiceRegistry
+import net.minestom.server.MinecraftServer
 import org.slf4j.LoggerFactory
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
@@ -37,6 +42,20 @@ class ServiceSocketServer(
     private fun id(hostPort: Int): String =
         registry.instanceByPort(hostPort)?.let { "${it.serviceName}:$hostPort" } ?: "?:$hostPort"
 
+    private fun rejectionReason(hello: ServiceMessage.Hello): String? {
+        val instance = registry.instanceByPort(hello.servicePort)
+        return when {
+            hello.nebulaProtocol != NebulaProtocol.VERSION ->
+                "nebula protocol ${hello.nebulaProtocol}, daemon speaks ${NebulaProtocol.VERSION}"
+            hello.minecraftProtocol != MinecraftServer.PROTOCOL_VERSION ->
+                "minecraft protocol ${hello.minecraftProtocol}, network runs ${MinecraftServer.PROTOCOL_VERSION} (${MinecraftServer.VERSION_NAME})"
+            instance == null -> "unknown service port"
+            instance.token.isBlank() -> "no token known for this instance"
+            !MessageDigest.isEqual(hello.token.toByteArray(), instance.token.toByteArray()) -> "invalid token"
+            else -> null
+        }
+    }
+
     fun start() {
         val server = embeddedServer(CIO, port = config.managementPort) {
             install(WebSockets) {
@@ -52,18 +71,20 @@ class ServiceSocketServer(
                             if (frame !is Frame.Text) continue
                             when (val message = json.decodeFromString(ServiceMessage.serializer(), frame.readText())) {
                                 is ServiceMessage.Hello -> {
+                                    val rejection = rejectionReason(message)
+                                    if (rejection != null) {
+                                        logger.warn("rejected {}: {}.", id(message.servicePort), rejection)
+                                        session.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, rejection))
+                                        return@webSocket
+                                    }
                                     servicePort = message.servicePort
                                     sessions[message.servicePort] = session
-                                    val known = registry.serviceConnected(message.servicePort, message.players)
-                                    if (known) {
-                                        val count = message.players.size
-                                        if (count > 0) {
-                                            logger.info("{} connected ({} players).", id(message.servicePort), count)
-                                        } else {
-                                            logger.info("{} connected.", id(message.servicePort))
-                                        }
+                                    registry.serviceConnected(message.servicePort, message.players)
+                                    val count = message.players.size
+                                    if (count > 0) {
+                                        logger.info("{} connected ({} players).", id(message.servicePort), count)
                                     } else {
-                                        logger.warn("hello from unknown service port {}.", message.servicePort)
+                                        logger.info("{} connected.", id(message.servicePort))
                                     }
                                 }
                                 is ServiceMessage.PlayerJoined -> servicePort?.let { port ->

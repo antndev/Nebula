@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import nebula.protocol.Command
 import nebula.protocol.NebulaPlayer
+import nebula.protocol.NebulaProtocol
 import nebula.protocol.ServiceMessage
 import org.slf4j.LoggerFactory
 import java.net.URI
@@ -20,10 +21,14 @@ import java.net.http.HttpClient
 import java.net.http.WebSocket
 import java.util.concurrent.CompletionStage
 
+private const val POLICY_VIOLATION = 1008
+
 class NodeConnection(
     private val daemonHost: String,
     private val daemonPort: Int,
     private val servicePort: Int,
+    private val minecraftProtocol: Int,
+    private val token: String,
     private val playersProvider: () -> List<NebulaPlayer>,
     private val onCommand: (Command) -> Unit = {},
     private val reconnectDelaySeconds: Long = 5,
@@ -60,7 +65,16 @@ class NodeConnection(
             .await()
 
         logger.info("connected to node at {}:{}.", daemonHost, daemonPort)
-        send(socket, ServiceMessage.Hello(servicePort, playersProvider()))
+        send(
+            socket,
+            ServiceMessage.Hello(
+                servicePort = servicePort,
+                players = playersProvider(),
+                nebulaProtocol = NebulaProtocol.VERSION,
+                minecraftProtocol = minecraftProtocol,
+                token = token,
+            ),
+        )
 
         val sender = scope.launch {
             for (message in outbox) {
@@ -100,6 +114,9 @@ class NodeConnection(
         }
 
         override fun onClose(webSocket: WebSocket, statusCode: Int, reason: String): CompletionStage<*>? {
+            if (statusCode == POLICY_VIOLATION) {
+                logger.error("node rejected this server: {}", reason)
+            }
             closed.complete(Unit)
             return null
         }

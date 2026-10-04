@@ -18,9 +18,10 @@ Consequences (accepted on purpose):
   (protocol 777, `26_3-SNAPSHOT`). Upgrading = bump Minestom everywhere at once.
 - The entrypoint shows that version in the server list and rejects any other client version with a
   clear message ("Please join with Minecraft 26.3.").
-- *(todo)* the live channel `Hello` carries `nebulaProtocol` (our wire version) + `minecraftProtocol`;
-  the daemon closes the socket with a clear reason on mismatch → an old lobby image can never
-  silently join a newer network.
+- The live channel `Hello` carries `nebulaProtocol` (our wire version, `NebulaProtocol.VERSION`) +
+  `minecraftProtocol`; the daemon closes the socket (`1008`) with a clear reason on mismatch → an
+  old lobby image can never silently join a newer network. Bump `NebulaProtocol.VERSION` on every
+  wire change that old servers can't handle.
 
 ## entrypoint & routing
 - **decided:** port `25565`, one per node, ONLY for the first join — never for server→server hops.
@@ -66,7 +67,7 @@ Messages today:
 
 | server → daemon (`ServiceMessage`) | daemon → server (`Command`) |
 |---|---|
-| `Hello(servicePort, players)` — snapshot on (re)connect | `ExpectPlayer(uuid, expiresAt)` — allowlist |
+| `Hello(servicePort, players, nebulaProtocol, minecraftProtocol, token)` — snapshot on (re)connect | `ExpectPlayer(uuid, expiresAt)` — allowlist |
 | `PlayerJoined(player)` — delta | `Transfer(uuid, host, port)` — send player elsewhere |
 | `PlayerLeft(uuid)` — delta | `Kick(uuid, reason?)` |
 | `TransferRequest(uuid, targetService)` — *(only logged so far)* | *(later)* `Message(uuid, text)`, rank updates |
@@ -78,9 +79,10 @@ Principles:
 - ignore unknown → an old server safely skips a new message
 - *(planned rename)* roots named by direction: `ServerToDaemon` / `DaemonToServer`
 
-**open — channel auth:** `:7654` accepts anyone today; a fake `Hello` can take over a real
-instance's session. Proposal: the daemon gives each container a random token via env
-(`NEBULA_TOKEN`), `Hello` must carry it.
+**Channel auth — decided:** the daemon gives each container a random token (env `NEBULA_TOKEN`,
+kept as container label `nebula.token` so it survives a daemon restart). `Hello` must carry it,
+otherwise the socket is closed (`1008`) and a running session is never replaced. Containers from
+an older daemon without a token are removed on reattach and recreated.
 
 ## instance lifecycle — open
 Today an instance is only "alive" while its socket is connected; a crashed container is never
@@ -115,13 +117,13 @@ SQLite first, Postgres later). Decide before parties/groups — it shapes the pr
 
 ## status
 **Phase 1 (the channel) — done:** entrypoint → `ExpectPlayer` → transfer → allowlist check, live
-presence (`Hello` / `PlayerJoined` / `PlayerLeft`), reattach running containers, minimum instances.
+presence (`Hello` / `PlayerJoined` / `PlayerLeft`), reattach running containers, minimum instances,
+version handshake + per-container token on the live channel.
 
 **Next, in order:**
-1. live channel: version handshake + auth token
-2. detect dead containers + real scaling (scale up at `playersToScaleUp`, warm instances, cooldown,
+1. detect dead containers + real scaling (scale up at `playersToScaleUp`, warm instances, cooldown,
    scale down empty)
-3. config file instead of `Main.kt`
-4. second service + backend → backend transfer (`TransferRequest` → daemon → `Transfer`)
-5. player data → groups / parties
-6. multi-node
+2. config file instead of `Main.kt`
+3. second service + backend → backend transfer (`TransferRequest` → daemon → `Transfer`)
+4. player data → groups / parties
+5. multi-node

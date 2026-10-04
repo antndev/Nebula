@@ -6,6 +6,7 @@ data class ServiceInstance(
     val serviceName: String,
     val hostPort: Int,
     val containerId: String,
+    val token: String,
     val status: ServiceInstanceStatus = ServiceInstanceStatus.STARTING,
     val players: List<NebulaPlayer> = emptyList(),
 ) {

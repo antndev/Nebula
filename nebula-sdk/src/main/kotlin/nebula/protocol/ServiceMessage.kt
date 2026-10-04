@@ -11,6 +11,9 @@ sealed class ServiceMessage {
     data class Hello(
         val servicePort: Int,
         val players: List<NebulaPlayer> = emptyList(),
+        val nebulaProtocol: Int = 0,
+        val minecraftProtocol: Int = 0,
+        val token: String = "",
     ) : ServiceMessage() {
         init {
             require(servicePort in 1..65535) { "servicePort must be between 1 and 65535." }

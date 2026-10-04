@@ -9,12 +9,14 @@ import nebula.service.ServiceInstance
 import nebula.service.ServiceInstanceStatus
 import nebula.service.ServiceRegistry
 import org.slf4j.LoggerFactory
+import java.util.UUID
 
 private const val SERVICE_CONTAINER_PORT: UShort = 25565u
 
 private const val LABEL_MANAGED = "nebula.managed"
 private const val LABEL_SERVICE = "nebula.service"
 private const val LABEL_PORT = "nebula.port"
+private const val LABEL_TOKEN = "nebula.token"
 
 class Scaler(
     private val config: Config,
@@ -32,11 +34,21 @@ class Scaler(
 
         logger.info("reattaching {} existing managed container(s)...", containers.size)
         for (container in containers) {
+            if (container.token.isBlank()) {
+                logger.info(
+                    "removing {} (container {}): created without a token.",
+                    "${container.serviceName}:${container.hostPort}",
+                    container.containerId.take(12),
+                )
+                dockerService.removeContainer(container.containerId)
+                continue
+            }
             registry.register(
                 ServiceInstance(
                     serviceName = container.serviceName,
                     hostPort = container.hostPort,
                     containerId = container.containerId,
+                    token = container.token,
                     status = ServiceInstanceStatus.STARTING,
                 )
             )
@@ -134,6 +146,7 @@ class Scaler(
             ?: error("no free host ports remain in the node port range.")
 
         logger.info("creating {}.", "${service.name}:$hostPort")
+        val token = UUID.randomUUID().toString()
         val request = CreateContainerRequest(
             image = service.image,
             containerPort = SERVICE_CONTAINER_PORT,
@@ -142,11 +155,13 @@ class Scaler(
                 LABEL_MANAGED to "true",
                 LABEL_SERVICE to service.name,
                 LABEL_PORT to hostPort.toString(),
+                LABEL_TOKEN to token,
             ),
             env = mapOf(
                 "NEBULA_HOST" to config.managementHost,
                 "NEBULA_PORT" to config.managementPort.toString(),
                 "NEBULA_SERVICE_PORT" to hostPort.toString(),
+                "NEBULA_TOKEN" to token,
             ),
         )
 
@@ -163,6 +178,7 @@ class Scaler(
             serviceName = service.name,
             hostPort = hostPort,
             containerId = containerId,
+            token = token,
             status = ServiceInstanceStatus.STARTING,
         )
 

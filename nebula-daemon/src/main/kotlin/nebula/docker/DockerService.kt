@@ -25,6 +25,7 @@ data class ManagedContainer(
     val containerId: String,
     val serviceName: String,
     val hostPort: Int,
+    val token: String,
 )
 
 class DockerService(
@@ -121,7 +122,8 @@ class DockerService(
                 .mapNotNull { container ->
                     val serviceName = container.labels["nebula.service"] ?: return@mapNotNull null
                     val hostPort = container.labels["nebula.port"]?.toIntOrNull() ?: return@mapNotNull null
-                    ManagedContainer(container.id, serviceName, hostPort)
+                    val token = container.labels["nebula.token"].orEmpty()
+                    ManagedContainer(container.id, serviceName, hostPort, token)
                 }
         }
 }

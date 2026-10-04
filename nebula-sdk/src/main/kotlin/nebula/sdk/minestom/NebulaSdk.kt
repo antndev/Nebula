@@ -27,6 +27,9 @@ object NebulaSdk {
             daemonPort = System.getenv("NEBULA_PORT")?.toIntOrNull() ?: 7654,
             servicePort = System.getenv("NEBULA_SERVICE_PORT")?.toIntOrNull()
                 ?: error("NEBULA_SERVICE_PORT is not set — is this service running outside of Nebula?"),
+            minecraftProtocol = MinecraftServer.PROTOCOL_VERSION,
+            token = System.getenv("NEBULA_TOKEN")
+                ?: error("NEBULA_TOKEN is not set — is this service running outside of Nebula?"),
             playersProvider = {
                 MinecraftServer.getConnectionManager().onlinePlayers.map { it.toNebulaPlayer() }
             },
