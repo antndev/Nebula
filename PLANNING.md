@@ -2,13 +2,35 @@
 
 Rough direction. Sections marked **decided** are settled; **open** ones are still idk-yet.
 
+## network shape — decided
+**No proxy.** The entrypoint only takes the very first join, then the vanilla transfer packet sends
+the client straight to a backend. Every later hop is backend → backend, again via transfer.
+
+Consequences (accepted on purpose):
+- the whole network speaks exactly one Minecraft version (see *versions*)
+- every backend port must be reachable from the internet — no central DDoS filter in front
+- cross-server features (party, /msg, global chat, tab list, friends) don't come for free from a
+  proxy — they go through the daemon over the live channel
+- every server switch is a real reconnect incl. the Mojang login of the target
+
+## versions — decided
+- One Minecraft version per network = the version of the Minestom build in use. Today: **26.3**
+  (protocol 777, `26_3-SNAPSHOT`). Upgrading = bump Minestom everywhere at once.
+- The entrypoint shows that version in the server list and rejects any other client version with a
+  clear message ("Please join with Minecraft 26.3.").
+- *(todo)* the live channel `Hello` carries `nebulaProtocol` (our wire version) + `minecraftProtocol`;
+  the daemon closes the socket with a clear reason on mismatch → an old lobby image can never
+  silently join a newer network.
+
 ## entrypoint & routing
-- Port `25565` = the entrypoint, one per node. Used ONLY for the very first join — never
-  for server→server transfers.
-- Services are defined in config: docker image, scaling, max players, joining behavior,
-  `persistent` flag.
-- Routing = a default service + a hostname→service map, e.g.
-  `bedwars.example.com → bedwars-lobby`, `default → lobby`. *(open: config format / YAML)*
+- **decided:** port `25565`, one per node, ONLY for the first join — never for server→server hops.
+- **decided:** the entrypoint is a tiny hand-rolled server that only uses Minestom's packet classes
+  (no `MinecraftServer`, no world, no instance): handshake → status/ping, or login start →
+  `ExpectPlayer` to the target → login success → `Transfer` in the configuration phase.
+- **decided:** the entrypoint runs offline (no Mojang call, no encryption). Identity is proven by
+  the target backend, which is online-mode (see *auth*). Saves one Mojang join per network entry.
+- **open:** routing = a default service + a hostname→service map, e.g.
+  `bedwars.example.com → bedwars-lobby`, `default → lobby`. Config format / YAML still open.
 
 ## ports
 - `25565` reserved for the entrypoint.
@@ -16,95 +38,90 @@ Rough direction. Sections marked **decided** are settled; **open** ones are stil
   (1000/node). On top of that a configurable per-node cap (`3..1000`, default 50).
 - Inside the container every service listens on `25565` (own network namespace, no clash).
 
+## auth & transfers — decided (option A, replaces the old HMAC ticket plan)
+Every backend runs **online-mode** → real uuid, signed skin/cape and encryption for free. Access
+control is a uuid allowlist pushed by the daemon:
+
+1. daemon picks the target → `ExpectPlayer(uuid, expiresAt)` (TTL 10s) to the target server
+2. only if that was delivered: the client gets `Transfer(host, port)`
+3. target in `AsyncPlayerConfigurationEvent`: uuid expected and not expired → join, else kick
+
+Notes:
+- Mojang `hasJoined` (server side) isn't rate limited. The real cap is the client-side join limit
+  (~6 per 30s per account) → *(todo)* per-uuid hop cooldown (~5s) + loop guard in the daemon.
+- Switch to offline backends + daemon-cached profile + token ("option D") only on a concrete need:
+  moving one player faster than ~6 hops/30s, surviving a Mojang outage, or bot/load tests.
+
 ## live channel (node ↔ servers) — decided
-Transport = **one WebSocket per server**, dialed OUT to its *local* daemon, kept open, both
-sides push instantly (that's the "live" part — no polling). Client = JDK `java.net.http`,
-daemon = Ktor, shared `nebula-protocol` sealed classes, no codegen. Redis later sits *behind*
-the daemon, it does not replace the socket.
+Transport = **one WebSocket per server**, dialed OUT to its *local* daemon, kept open, both sides
+push instantly. Client = JDK `java.net.http`, daemon = Ktor, shared sealed classes in
+`nebula-sdk` (package `nebula.protocol`), no codegen. Redis later sits *behind* the daemon, it does
+not replace the socket.
 
-**Reliability:** within a live connection TCP gives ordered, lossless delivery — no message is
-silently dropped or reordered. A break is always noticed: a clean close (FIN/RST), or a
-WS-level **ping/pong heartbeat** for silent death (crash / cable / NAT timeout) → close →
-reconnect. On reconnect the `Status` snapshot resyncs, so deltas missed during the gap never
-cause drift. The heartbeat is **transport-level** (Ping/Pong frames), NOT an app message —
-keep it (tuned, not aggressive) for dead-connection detection.
+**Reliability:** TCP gives ordered, lossless delivery within a connection. A break is always
+noticed: a clean close, or a WS-level ping/pong heartbeat for silent death → close → reconnect. On
+reconnect the `Hello` snapshot resyncs, so deltas missed during the gap never cause drift.
 
-Two message sets, named by **direction** — no abstract "Command"/"ServiceMessage" categories.
+Messages today:
 
-### server → daemon  (`ServerToDaemon`)
-- `Status(servicePort, players)` — full snapshot, on connect + reconnect (NOT a heartbeat; live changes go via the deltas)
-- `Join(player)` — delta
-- `Leave(uuid)` — delta
-- *(later)* `TransferRequest(uuid, targetService)` — server-initiated transfer (NPC click)
+| server → daemon (`ServiceMessage`) | daemon → server (`Command`) |
+|---|---|
+| `Hello(servicePort, players)` — snapshot on (re)connect | `ExpectPlayer(uuid, expiresAt)` — allowlist |
+| `PlayerJoined(player)` — delta | `Transfer(uuid, host, port)` — send player elsewhere |
+| `PlayerLeft(uuid)` — delta | `Kick(uuid, reason?)` |
+| `TransferRequest(uuid, targetService)` — *(only logged so far)* | *(later)* `Message(uuid, text)`, rank updates |
 
-### daemon → server  (`DaemonToServer`)
-- `Kick(uuid, reason?)`
-- `Transfer(uuid, host, port, ticket)`
-- `Message(uuid, text)`  *(+ optional `Broadcast(text)`)*
-- *(later)* permission / rank updates
-
-### derived, NOT on the wire
-- instance *lifecycle* status (starting/running) → from the connection + the `Status` message
-- capacity / full → daemon computes it from presence + config
-- journey / audit trail → daemon-side (it mints every hop); redis later
-- secret → env `NEBULA_SECRET`
-
-### principles
-- two sealed roots, named by direction (`ServerToDaemon` / `DaemonToServer`) — the grouping IS the direction
+Principles:
 - snapshot + delta, never poll
 - derive lifecycle status, don't transmit it
 - stable `@SerialName` discriminators (wire survives class renames)
 - ignore unknown → an old server safely skips a new message
-- auth off-wire (local HMAC) → the channel stays fire-and-forget
+- *(planned rename)* roots named by direction: `ServerToDaemon` / `DaemonToServer`
 
-## transfers + tokens — decided
-Every transfer carries a token; the only tokenless door is the first entrypoint join. SMP
-access control is the server's native `whitelist.json`.
+**open — channel auth:** `:7654` accepts anyone today; a fake `Hello` can take over a real
+instance's session. Proposal: the daemon gives each container a random token via env
+(`NEBULA_TOKEN`), `Hello` must carry it.
 
-Token = HMAC-signed, **stateless**, validated **locally** on the target (no daemon roundtrip):
-```
-claims = uuid
-       · target  : serviceId  (+ instanceId only for keyed/persistent services)
-       · source  : serviceId  (informational — UX "welcome back", audit)
-       · exp      (TTL ~30s, + optional iat)
-sig    = HMAC_SHA256(NEBULA_SECRET, claims)
-```
-
-Flow:
-1. daemon decides routing → mints the ticket → `Transfer(uuid, host, port, ticket)` to the SOURCE server
-2. source: `storeCookie("nebula:ticket", ticket)` → fires the MC transfer packet to `(host, port)`
-3. client connects to the target instance
-4. target in `AsyncPlayerConfigurationEvent`: read cookie → check `sig` · `uuid == player` · `target == self` · `exp` → ok join, else disconnect
-5. entrypoint skips the check (front door)
-
-`source` is informational only — validation never depends on it. Routing policy ("may lobby
-send to bedwars?") is enforced by the daemon at mint time, not by the target.
+## instance lifecycle — open
+Today an instance is only "alive" while its socket is connected; a crashed container is never
+noticed and never replaced. Proposal: Docker (inspect/events) is the source of truth for "the
+container lives", the socket for "ready + who is on it".
 
 ## services (generic) — decided
-No big `kind` enum, no class per gamemode. One generic `Service`; specifics come from config
-flags the daemon interprets. A new gamemode = a new config entry, not new code.
-Main flag: `persistent` (bool) = whether the world must be saved. SMPs are persistent, don't
-scale, and never auto-delete (`scaleDownEmptyAfterSeconds = null` = never).
+No big `kind` enum, no class per gamemode. One generic `Service`; specifics come from config flags
+the daemon interprets. A new gamemode = a new config entry, not new code.
+Main flag: `persistent` (bool) = whether the world must be saved. SMPs are persistent, don't scale,
+and never auto-delete (`scaleDownEmptyAfterSeconds = null` = never). *(open: what the "key" of a
+keyed/persistent instance is — per player, per world?)*
 
-## decentralized / multi-proxy — open
-Every node runs its own daemon + entrypoint; you join and get redirected — maybe to another
-node, maybe to the same node on a different port. State can't live in one node's memory →
-shared store (Redis: instances, telemetry via TTL heartbeats, transfer tokens). Daemon =
-node-agent (local docker) + one scheduler-leader (redis lock) deciding placement; per-node
-command queue executes. *(open: details)*
+## decentralized / multi-node — open
+Every node runs its own daemon + entrypoint; you join and get transferred — maybe to another node,
+maybe to the same node on a different port. State can't live in one node's memory → shared store
+(Redis: instances, presence, locks). Daemon = node-agent (local docker) + one scheduler deciding
+placement. Simpler alternative to weigh: one fixed controller daemon + agent daemons. Not before a
+single node is feature complete.
 
 ## vanilla — open
-Want to run 100% vanilla servers too (the Mojang jar as a "foreign" service): telemetry via
-Server List Ping + RCON (no SDK), join via transfer + whitelist, leave via disconnect. An
-in-game transfer-out proxy is NOT mini (needs protocol termination + encryption) — defer it.
+Run 100% vanilla servers too (the Mojang jar as a "foreign" service, same version as the network):
+telemetry via Server List Ping + RCON (no SDK), access via `whitelist.json`, leave via disconnect.
 
 ## player data (groups, perms, prefixes, rank colors) — open
-Decentralized + live updates. Storage tbd.
+The daemon owns it and pushes changes over the live channel. Storage behind an interface (file /
+SQLite first, Postgres later). Decide before parties/groups — it shapes the protocol.
 
-## first step (phase 1)
-Just the channel, nothing else: join → live presence (`Status` + `Join`/`Leave`) → the daemon
-pushes `Transfer` down → the server fires the MC transfer packet → the target validates the
-HMAC ticket. State stays in-memory behind a small interface, so switching to Redis later is an
-impl swap, not a rewrite. Player data comes later.
+## not now
+- admin dashboard — removed, not needed for now
+- tests — later (registry + scaling logic are pure and easy to test once we start)
 
-Protocol delta for phase 1 = **two new `DaemonToServer` variants**: `Transfer`, `Message`.
+## status
+**Phase 1 (the channel) — done:** entrypoint → `ExpectPlayer` → transfer → allowlist check, live
+presence (`Hello` / `PlayerJoined` / `PlayerLeft`), reattach running containers, minimum instances.
+
+**Next, in order:**
+1. live channel: version handshake + auth token
+2. detect dead containers + real scaling (scale up at `playersToScaleUp`, warm instances, cooldown,
+   scale down empty)
+3. config file instead of `Main.kt`
+4. second service + backend → backend transfer (`TransferRequest` → daemon → `Transfer`)
+5. player data → groups / parties
+6. multi-node
