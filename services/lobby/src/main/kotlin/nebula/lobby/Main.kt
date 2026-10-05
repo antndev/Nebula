@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("NebulaLobby")
 
 fun main() {
-    val port = System.getenv("LOBBY_PORT")?.toIntOrNull() ?: 25565
+    val port = 25565
     System.setProperty("minestom.accept-transfers", "true")
 
     val server = MinecraftServer.init(Auth.Online())

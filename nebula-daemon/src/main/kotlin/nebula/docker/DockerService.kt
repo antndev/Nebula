@@ -13,10 +13,8 @@ import me.devnatan.dockerkt.resource.container.remove
 
 data class CreateContainerRequest(
     val image: String,
-    val command: List<String> = emptyList(),
     val containerPort: UShort? = null,
     val hostPort: UShort? = null,
-    val bindIp: String = "0.0.0.0",
     val labels: Map<String, String> = emptyMap(),
     val env: Map<String, String> = emptyMap(),
     val extraHosts: List<String> = emptyList(),
@@ -52,10 +50,6 @@ class DockerService(
                     env = request.env.map { (k, v) -> "$k=$v" }
                 }
 
-                if (request.command.isNotEmpty()) {
-                    command = request.command
-                }
-
                 request.containerPort?.let { exposedPort(it) }
 
                 hostConfig {
@@ -67,7 +61,7 @@ class DockerService(
                     val hostPort = request.hostPort
                     if (containerPort != null && hostPort != null) {
                         portBindings(containerPort) {
-                            add(PortBinding(ip = request.bindIp, port = hostPort))
+                            add(PortBinding(ip = "0.0.0.0", port = hostPort))
                         }
                     }
                 }
@@ -79,17 +73,6 @@ class DockerService(
             client.containers.start(containerId)
         }
     }
-
-    suspend fun stopContainer(containerId: String) {
-        withContext(Dispatchers.IO) {
-            client.containers.stop(containerId)
-        }
-    }
-
-    suspend fun inspectContainer(containerId: String) =
-        withContext(Dispatchers.IO) {
-            client.containers.inspect(containerId)
-        }
 
     suspend fun removeContainer(
         containerId: String,

@@ -201,7 +201,7 @@ class Scaler(
                 LABEL_PORT to hostPort.toString(),
                 LABEL_TOKEN to token,
             ),
-            env = mapOf(
+            env = service.environment + mapOf(
                 "NEBULA_HOST" to config.managementHost,
                 "NEBULA_PORT" to config.managementPort.toString(),
                 "NEBULA_SERVICE_PORT" to hostPort.toString(),
